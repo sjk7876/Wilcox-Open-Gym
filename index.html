@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wilcox Open Gym</title>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0c0c;
+  --surface: #161616;
+  --surface2: #1e1e1e;
+  --border: #282828;
+  --accent: #d4f54e;
+  --accent2: #ff5f3d;
+  --text: #efefef;
+  --muted: #666;
+  --dim: #333;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+}
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(212,245,78,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212,245,78,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events:none;
+  z-index:0;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; position: relative; z-index:1; }
+
+/* HEADER */
+header { padding: 44px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 36px; }
+h1 {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: clamp(2.8rem, 7vw, 5rem);
+  color: var(--accent);
+  letter-spacing: -1px;
+  line-height: 1;
+  text-shadow: 3px 3px 0 rgba(212,245,78,0.12);
+}
+.header-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-top: 8px;
+}
+
+/* SECTION LABELS */
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-label::after { content:''; flex:1; height:1px; background: var(--border); }
+
+/* TEAM COLOR SETUP */
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 32px;
+}
+@media(max-width:600px){ .team-grid{ grid-template-columns:1fr 1fr; } }
+.team-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.team-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  width: 28px;
+  flex-shrink: 0;
+}
+.color-dot {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+select {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+  appearance: none;
+}
+select:focus { border-color: var(--accent); }
+
+/* ROUND 1 SETUP */
+.courts-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+@media(max-width:580px){ .courts-row{ grid-template-columns:1fr; } }
+.court-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.court-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.63rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.vs-block { display: flex; flex-direction: column; gap: 6px; }
+.team-pick-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 2px;
+}
+.vs-sep {
+  text-align: center;
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 0.75rem;
+  color: var(--accent2);
+  letter-spacing: 0.25em;
+  padding: 2px 0;
+}
+
+/* WAITING */
+.waiting-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.waiting-slots { display: flex; gap: 10px; flex-wrap: wrap; }
+.wait-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.wait-dot { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,0.12); }
+
+/* ROUNDS SLIDER */
+.rounds-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.rounds-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.round-pills { display: flex; gap: 6px; }
+.pill {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  padding: 7px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pill:hover { border-color: var(--accent); color: var(--accent); }
+.pill.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+/* BUTTONS */
+.action-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 44px;
+}
+.btn-gen {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  padding: 13px 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 24px rgba(212,245,78,0.18);
+}
+.btn-gen:hover { transform: translateY(-2px); box-shadow: 0 4px 32px rgba(212,245,78,0.32); }
+.btn-gen:active { transform: translateY(0); }
+.btn-reset {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-reset:hover { border-color: var(--accent2); color: var(--accent2); }
+.error-msg {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--accent2);
+  padding: 10px 0;
+  display: none;
+}
+
+/* SCHEDULE OUTPUT */
+#output { margin-bottom: 60px; }
+.rounds-list { display: flex; flex-direction: column; gap: 14px; }
+
+.round-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  opacity: 0;
+  animation: fadeUp 0.3s ease forwards;
+}
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(8px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+.round-head {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.rnum {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 2rem;
+  color: var(--accent);
+  line-height: 1;
+  min-width: 30px;
+}
+.rhead-meta { display: flex; flex-direction: column; gap: 2px; }
+.rhead-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.rhead-sitting {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+.rhead-sitting span { color: var(--muted); }
+
+.round-body {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) 1px;
+}
+@media(max-width:640px){ .round-body{ grid-template-columns:1fr; } }
+
+.match-cell {
+  padding: 18px 20px;
+  border-right: 1px solid var(--border);
+  position: relative;
+}
+.match-cell:nth-child(3) { border-right: none; }
+.divider-col { background: var(--border); width: 1px; display:none; }
+
+.court-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.matchup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.team-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s;
+}
+.team-badge:hover { border-color: var(--dim); }
+.tbdot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.1);
+  flex-shrink:0;
+}
+.tbname {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.82rem;
+  color: var(--text);
+  text-transform: capitalize;
+}
+.match-vs {
+  text-align: center;
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 0.65rem;
+  color: var(--accent2);
+  letter-spacing: 0.2em;
+  padding: 1px 0;
+}
+
+/* WINNER SELECTOR in output */
+.winner-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.win-btn {
+  flex: 1;
+  min-width: 60px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.win-btn:hover { border-color: var(--accent); color: var(--accent); }
+.win-btn.selected {
+  background: rgba(212,245,78,0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sitting-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: #111;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.sitting-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+.sitting-team {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--dim);
+  text-transform: capitalize;
+}
+.sitting-dot { width:8px; height:8px; border-radius:50%; opacity:0.4; }
+
+/* Reroll button */
+.btn-reroll {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: auto;
+}
+.btn-reroll:hover { border-color: var(--muted); color: var(--text); }
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 20px 0;
+  margin-top: 20px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--dim);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+/* FORCE MATCHUPS */
+select.force-select { flex: none; width: 150px; }
+.force-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.force-vs-sep {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 0.72rem;
+  color: var(--accent2);
+  letter-spacing: 0.2em;
+}
+.btn-add-force {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.75rem;
+  padding: 6px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-add-force:hover { border-color: var(--accent); background: rgba(212,245,78,0.06); }
+.force-add-err {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--accent2);
+}
+.force-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.force-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.force-item.force-failed { border-color: var(--accent2); background: rgba(255,95,61,0.05); }
+.force-item.force-ok { border-color: rgba(212,245,78,0.35); }
+.force-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text);
+  text-transform: capitalize;
+}
+.force-dot { width:10px; height:10px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.1); flex-shrink:0; }
+.force-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.63rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.force-badge-ok { color: var(--accent); border: 1px solid rgba(212,245,78,0.4); }
+.force-badge-fail { color: var(--accent2); border: 1px solid var(--accent2); }
+.btn-remove-force {
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.btn-remove-force:hover { color: var(--accent2); }
+
+/* ── MOBILE ── */
+@media(max-width:640px) {
+  /* Stacked match cells: switch from right-border to bottom-border separators */
+  .match-cell { border-right: none; border-bottom: 1px solid var(--border); }
+  .match-cell:last-child { border-bottom: none; }
+}
+
+@media(max-width:480px) {
+  header { padding: 24px 0 18px; margin-bottom: 24px; }
+
+  /* Prevent iOS auto-zoom on focus */
+  select { font-size: 16px; }
+
+  /* Force add row: selects share a row, button drops full-width below */
+  select.force-select { flex: 1; width: auto; }
+  .btn-add-force { width: 100%; text-align: center; padding: 10px 14px; }
+
+  /* Action bar: stack buttons full-width */
+  .action-bar { flex-direction: column; align-items: stretch; }
+  .btn-gen { text-align: center; padding: 14px; }
+  .btn-reset { text-align: center; }
+
+  /* Win buttons: larger tap target */
+  .win-btn { padding: 10px 8px; font-size: 0.75rem; min-height: 40px; }
+
+  /* Round head: allow wrap so reroll button doesn't overflow */
+  .round-head { flex-wrap: wrap; row-gap: 8px; }
+  .btn-reroll { margin-left: 0; width: 100%; text-align: center; }
+
+  /* Force items: prevent long team names from overflowing */
+  .force-team { min-width: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>WILCOX OPEN GYM</h1>
+    <div class="header-sub">Volleyball Schedule Generator &mdash; 9 Teams · 3 Courts · 2 On / 1 Off</div>
+  </header>
+
+  <!-- STEP 1: TEAM COLORS -->
+  <div class="section-label">Step 1 — Assign Team Colors</div>
+  <div class="team-grid" id="team-grid"></div>
+
+  <!-- STEP 2: ROUND 1 MATCHUPS -->
+  <div class="section-label">Step 2 — Round 1 Matchups</div>
+  <div class="courts-row" id="courts-row"></div>
+
+  <!-- STEP 3: WAITING TEAMS -->
+  <div class="section-label">Step 3 — Waiting Teams (Round 1)</div>
+  <div class="waiting-card">
+    <div class="section-label" style="margin:0; flex-shrink:0; white-space:nowrap; border:none;">Sitting out:</div>
+    <div class="waiting-slots" id="waiting-display"></div>
+  </div>
+
+  <!-- STEP 3.5: FORCE MATCHUPS -->
+  <div class="section-label">Force Matchups <span style="font-size:0.6em;color:var(--dim);margin-left:4px;">— optional</span></div>
+  <div style="margin-bottom:32px;">
+    <div class="force-add-row">
+      <select class="force-select" id="force-a"></select>
+      <span class="force-vs-sep">VS</span>
+      <select class="force-select" id="force-b"></select>
+      <button class="btn-add-force" onclick="addForcedMatch()">+ Add</button>
+      <span class="force-add-err" id="force-add-err"></span>
+    </div>
+    <div class="force-list" id="force-list"></div>
+  </div>
+
+  <!-- STEP 4: ROUNDS -->
+  <div class="section-label">Step 4 — Number of Rounds</div>
+  <div class="rounds-control">
+    <div class="rounds-label">Rounds to generate:</div>
+    <div class="round-pills" id="round-pills"></div>
+  </div>
+
+  <!-- ACTION -->
+  <div class="action-bar">
+    <button class="btn-gen" onclick="generate()">⚡ Generate Schedule</button>
+    <button class="btn-reset" onclick="resetOutput()">Clear</button>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div id="output"></div>
+
+  <footer>wilcox.spencerkurtz.com &mdash; built for open gym</footer>
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const COLORS = [
+  { name:'red',       hex:'#e53935' },
+  { name:'blue',      hex:'#1e88e5' },
+  { name:'yellow',    hex:'#fdd835' },
+  { name:'gray',      hex:'#757575' },
+  { name:'white',     hex:'#eeeeee' },
+  { name:'black',     hex:'#212121' },
+  { name:'light blue',hex:'#4fc3f7' },
+  { name:'green',     hex:'#43a047' },
+  { name:'pink',      hex:'#e91e8c' },
+  { name:'purple',    hex:'#8e24aa' },
+  { name:'brown',     hex:'#795548' },
+  { name:'orange',    hex:'#fb8c00' },
+];
+
+const NUM_TEAMS = 9;
+const NUM_COURTS = 3;
+
+// team assignments: teamColors[i] = color name for team i+1
+let teamColors = ['red','blue','yellow','gray','white','black','light blue','green','pink'];
+
+// round 1 matchups: [[t1,t2],[t3,t4],[t5,t6]] (1-indexed team numbers)
+let r1matchups = [[1,2],[3,4],[5,6]];
+// waiting teams for round 1 (1-indexed)
+let r1waiting = [7,8,9];
+
+let numRounds = 7;
+
+// Generated schedule: array of round objects
+// { matches: [{a, b, winner}], sitting: [t,...] }
+let schedule = [];
+
+// History of matchups played: Set of "min-max" strings
+let playedMatchups = new Set();
+
+// Forced matchup constraints
+let forcedMatches = []; // [{ a: teamNum, b: teamNum }]
+// 1-based round number when satisfied, null = pending, -1 = failed
+let forcedMatchSatisfiedRound = [];
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  buildTeamGrid();
+  buildCourts();
+  buildPills();
+  syncWaiting();
+  buildForceSelects();
+};
+
+// ─── TEAM GRID ────────────────────────────────────────────────────────────────
+function buildTeamGrid() {
+  const grid = document.getElementById('team-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < NUM_TEAMS; i++) {
+    const color = teamColors[i];
+    const hex = colorHex(color);
+    const row = document.createElement('div');
+    row.className = 'team-row';
+    row.innerHTML = `
+      <span class="team-num">T${i+1}</span>
+      <div class="color-dot" id="dot-${i}" style="background:${hex}"></div>
+      <select onchange="setTeamColor(${i}, this.value)">
+        ${COLORS.map(c=>`<option value="${c.name}" ${c.name===color?'selected':''}>${c.name}</option>`).join('')}
+      </select>
+    `;
+    grid.appendChild(row);
+  }
+}
+
+function setTeamColor(idx, color) {
+  teamColors[idx] = color;
+  document.getElementById(`dot-${idx}`).style.background = colorHex(color);
+  syncWaiting();
+  refreshCourts();
+  refreshForceSelects();
+}
+
+function colorHex(name) {
+  return (COLORS.find(c=>c.name===name)||{hex:'#555'}).hex;
+}
+
+function teamLabel(tnum) {
+  return teamColors[tnum-1] || `Team ${tnum}`;
+}
+
+// ─── COURTS / R1 SETUP ───────────────────────────────────────────────────────
+function buildCourts() {
+  const row = document.getElementById('courts-row');
+  row.innerHTML = '';
+  for (let c = 0; c < NUM_COURTS; c++) {
+    const [a, b] = r1matchups[c];
+    const card = document.createElement('div');
+    card.className = 'court-card';
+    card.innerHTML = `
+      <div class="court-tag">Court ${c+1}</div>
+      <div class="vs-block">
+        <div>
+          <div class="team-pick-label">Home</div>
+          <select id="r1-c${c}-a" onchange="updateR1(${c},'a',this.value)">
+            ${teamOptions(a)}
+          </select>
+        </div>
+        <div class="vs-sep">VS</div>
+        <div>
+          <div class="team-pick-label">Away</div>
+          <select id="r1-c${c}-b" onchange="updateR1(${c},'b',this.value)">
+            ${teamOptions(b)}
+          </select>
+        </div>
+      </div>
+    `;
+    row.appendChild(card);
+  }
+}
+
+function teamOptions(selected) {
+  return Array.from({length:NUM_TEAMS},(_,i)=>i+1)
+    .map(t=>`<option value="${t}" ${t===selected?'selected':''}>${t} — ${teamLabel(t)}</option>`)
+    .join('');
+}
+
+function refreshCourts() {
+  for (let c = 0; c < NUM_COURTS; c++) {
+    ['a','b'].forEach(side => {
+      const sel = document.getElementById(`r1-c${c}-${side}`);
+      if (!sel) return;
+      const cur = parseInt(sel.value);
+      sel.innerHTML = teamOptions(cur);
+    });
+  }
+  syncWaiting();
+}
+
+function updateR1(court, side, val) {
+  if (side==='a') r1matchups[court][0] = parseInt(val);
+  else r1matchups[court][1] = parseInt(val);
+  syncWaiting();
+}
+
+function syncWaiting() {
+  const playing = new Set(r1matchups.flat());
+  r1waiting = [];
+  for (let t=1; t<=NUM_TEAMS; t++) {
+    if (!playing.has(t)) r1waiting.push(t);
+  }
+  const disp = document.getElementById('waiting-display');
+  disp.innerHTML = r1waiting.map(t => `
+    <div class="wait-slot">
+      <div class="wait-dot" style="background:${colorHex(teamColors[t-1])}"></div>
+      <span style="font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--muted);text-transform:capitalize;">${teamLabel(t)}</span>
+    </div>
+  `).join('');
+}
+
+// ─── FORCE MATCHUPS ───────────────────────────────────────────────────────────
+function buildForceSelects() {
+  const selA = document.getElementById('force-a');
+  const selB = document.getElementById('force-b');
+  selA.innerHTML = forceTeamOptions(1);
+  selB.innerHTML = forceTeamOptions(2);
+}
+
+function forceTeamOptions(selected) {
+  return Array.from({length: NUM_TEAMS}, (_, i) => i+1)
+    .map(t => `<option value="${t}" ${t===selected?'selected':''}>${t} — ${teamLabel(t)}</option>`)
+    .join('');
+}
+
+function refreshForceSelects() {
+  ['force-a', 'force-b'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = parseInt(sel.value) || 1;
+    sel.innerHTML = forceTeamOptions(cur);
+  });
+  renderForcedList();
+}
+
+function addForcedMatch() {
+  const errEl = document.getElementById('force-add-err');
+  const a = parseInt(document.getElementById('force-a').value);
+  const b = parseInt(document.getElementById('force-b').value);
+
+  if (a === b) { errEl.textContent = 'A team cannot play itself.'; return; }
+  if (forcedMatches.some(fm => matchKey(fm.a, fm.b) === matchKey(a, b))) {
+    errEl.textContent = 'That matchup is already in the list.'; return;
+  }
+  errEl.textContent = '';
+  forcedMatches.push({ a, b });
+  forcedMatchSatisfiedRound.push(null);
+  renderForcedList();
+}
+
+function removeForcedMatch(idx) {
+  forcedMatches.splice(idx, 1);
+  forcedMatchSatisfiedRound.splice(idx, 1);
+  renderForcedList();
+}
+
+function renderForcedList() {
+  const list = document.getElementById('force-list');
+  if (!forcedMatches.length) { list.innerHTML = ''; return; }
+  list.innerHTML = forcedMatches.map(({ a, b }, i) => {
+    const v = forcedMatchSatisfiedRound[i];
+    const isFailed = v === -1;
+    const isSatisfied = v !== null && v > 0;
+    const cls = isFailed ? 'force-failed' : isSatisfied ? 'force-ok' : '';
+    const badge = isFailed
+      ? `<span class="force-badge force-badge-fail">✗ failed</span>`
+      : isSatisfied
+        ? `<span class="force-badge force-badge-ok">✓ R${v}</span>`
+        : '';
+    return `
+      <div class="force-item ${cls}">
+        <div class="force-team">
+          <div class="force-dot" style="background:${colorHex(teamColors[a-1])}"></div>
+          ${teamLabel(a)}
+        </div>
+        <span class="force-vs-sep" style="font-size:0.6rem;">VS</span>
+        <div class="force-team">
+          <div class="force-dot" style="background:${colorHex(teamColors[b-1])}"></div>
+          ${teamLabel(b)}
+        </div>
+        ${badge}
+        <button class="btn-remove-force" onclick="removeForcedMatch(${i})" title="Remove">×</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function pairFour(pool, played) {
+  const [a, b, c, d] = pool;
+  const options = [[[a,b],[c,d]], [[a,c],[b,d]], [[a,d],[b,c]]];
+  for (const opt of shuffle([...options])) {
+    if (!played.has(matchKey(opt[0][0], opt[0][1])) &&
+        !played.has(matchKey(opt[1][0], opt[1][1]))) {
+      return opt;
+    }
+  }
+  return [[a,b],[c,d]];
+}
+
+// ─── ROUND PILLS ─────────────────────────────────────────────────────────────
+function buildPills() {
+  const cont = document.getElementById('round-pills');
+  cont.innerHTML = '';
+  [5,6,7].forEach(n => {
+    const p = document.createElement('button');
+    p.className = 'pill' + (n===numRounds?' active':'');
+    p.textContent = n;
+    p.onclick = () => { numRounds=n; buildPills(); };
+    cont.appendChild(p);
+  });
+}
+
+// ─── VALIDATION ──────────────────────────────────────────────────────────────
+function validate() {
+  const err = document.getElementById('error-msg');
+  // Check no duplicate teams in r1
+  const playing = r1matchups.flat();
+  const unique = new Set(playing);
+  if (unique.size !== playing.length) {
+    err.style.display='block';
+    err.textContent = 'Error: A team appears more than once in Round 1 matchups.';
+    return false;
+  }
+  // Check no same team vs itself
+  for (let m of r1matchups) {
+    if (m[0]===m[1]) {
+      err.style.display='block';
+      err.textContent = 'Error: A team cannot play itself.';
+      return false;
+    }
+  }
+  err.style.display='none';
+  return true;
+}
+
+// ─── SCHEDULE GENERATION ──────────────────────────────────────────────────────
+function matchKey(a, b) {
+  return `${Math.min(a,b)}-${Math.max(a,b)}`;
+}
+
+/**
+ * Try to pair winners (3 teams) against incoming (3 teams) with no repeats.
+ * Returns array of [w, inc] pairs or null if impossible.
+ */
+function pairTeams(groupA, groupB, played) {
+  // Try all permutations of groupB against groupA
+  const perms = permutations(groupB);
+  for (const perm of shuffle(perms)) {
+    let ok = true;
+    for (let i=0; i<groupA.length; i++) {
+      if (played.has(matchKey(groupA[i], perm[i]))) { ok=false; break; }
+    }
+    if (ok) return groupA.map((a,i)=>[a,perm[i]]);
+  }
+  return null;
+}
+
+function permutations(arr) {
+  if (arr.length<=1) return [arr];
+  const result=[];
+  for(let i=0;i<arr.length;i++){
+    const rest=arr.filter((_,j)=>j!==i);
+    permutations(rest).forEach(p=>result.push([arr[i],...p]));
+  }
+  return result;
+}
+
+function shuffle(arr) {
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function generate() {
+  if (!validate()) return;
+
+  forcedMatchSatisfiedRound = forcedMatches.map(() => null);
+  document.getElementById('error-msg').style.display = 'none';
+
+  schedule = [];
+  playedMatchups = new Set();
+
+  const r1matches = r1matchups.map(([a,b]) => {
+    playedMatchups.add(matchKey(a,b));
+    return {a, b, winner: null};
+  });
+
+  schedule.push({ matches: r1matches, sitting: [...r1waiting] });
+
+  // Check if any forced match is already in R1
+  forcedMatches.forEach(({ a, b }, i) => {
+    r1matchups.forEach(([ra, rb]) => {
+      if ((ra===a && rb===b) || (ra===b && rb===a)) {
+        forcedMatchSatisfiedRound[i] = 1;
+      }
+    });
+  });
+
+  renderSchedule();
+  renderForcedList();
+}
+
+function onWinnerSelected(roundIdx, courtIdx, winner) {
+  schedule = schedule.slice(0, roundIdx + 1);
+  rebuildPlayedMatchups(roundIdx);
+  // Reset forced match satisfaction for rounds after the current one
+  forcedMatchSatisfiedRound = forcedMatchSatisfiedRound.map(v =>
+    (v !== null && v > 0 && v <= roundIdx + 1) ? v : null
+  );
+
+  schedule[roundIdx].matches[courtIdx].winner = winner;
+
+  const rnd = schedule[roundIdx];
+  if (rnd.matches.some(m => m.winner === null)) {
+    renderSchedule();
+    renderForcedList();
+    return;
+  }
+
+  // Cascade all remaining rounds
+  for (let i = roundIdx; i < numRounds - 1; i++) {
+    computeNextRound(i);
+  }
+
+  // Check for forced matches that couldn't be satisfied
+  const failedIndices = forcedMatches
+    .map((_, i) => i)
+    .filter(i => forcedMatchSatisfiedRound[i] === null);
+
+  if (failedIndices.length > 0) {
+    failedIndices.forEach(i => { forcedMatchSatisfiedRound[i] = -1; });
+    schedule = [];
+    const err = document.getElementById('error-msg');
+    err.style.display = 'block';
+    err.textContent = `Could not schedule: ${failedIndices.map(i =>
+      `${teamLabel(forcedMatches[i].a)} vs ${teamLabel(forcedMatches[i].b)}`
+    ).join(' · ')}`;
+  }
+
+  renderSchedule();
+  renderForcedList();
+}
+
+function rebuildPlayedMatchups(upToRound) {
+  playedMatchups = new Set();
+  for (let i = 0; i <= upToRound && i < schedule.length; i++) {
+    schedule[i].matches.forEach(m => playedMatchups.add(matchKey(m.a, m.b)));
+  }
+}
+
+function computeNextRound(roundIdx) {
+  if (roundIdx + 1 >= numRounds) return;
+
+  const rnd = schedule[roundIdx];
+  const sitting = rnd.sitting;
+
+  let nextSitting, stayGroup, comeOnGroup;
+
+  if (roundIdx === 0) {
+    // R1 → R2: the ONLY round where wins matter
+    // Winners stay for R2 (their 2nd game). Losers sit R2. R1-sitters come on.
+    const winners = rnd.matches.map(m => m.winner);
+    const losers  = rnd.matches.map(m => m.a === m.winner ? m.b : m.a);
+    nextSitting = losers;
+    stayGroup   = winners;
+    comeOnGroup = [...sitting];
+  } else {
+    // R2+ → fully mechanical, wins don't matter
+    // Look at who played THIS round vs who played LAST round:
+    // - played both this round AND last round = 2 consecutive → sit next
+    // - played this round but sat last round = 1 consecutive → stay
+    // - sat this round → come on next
+    const prevSittingSet = new Set(schedule[roundIdx - 1].sitting);
+    const playingNow = rnd.matches.flatMap(m => [m.a, m.b]);
+
+    const playedTwoInARow = playingNow.filter(t => !prevSittingSet.has(t));
+    const playedOneInARow = playingNow.filter(t =>  prevSittingSet.has(t));
+
+    nextSitting = playedTwoInARow;
+    stayGroup   = playedOneInARow;
+    comeOnGroup = [...sitting];
+  }
+
+  // Sort stayGroup by their court in the current round so staying teams are
+  // assigned back to the same court in the next round wherever possible.
+  const prevCourtOf = {};
+  rnd.matches.forEach((m, ci) => { prevCourtOf[m.a] = ci; prevCourtOf[m.b] = ci; });
+  const stayByPrevCourt = [...stayGroup].sort((a, b) => (prevCourtOf[a] ?? 0) - (prevCourtOf[b] ?? 0));
+
+  // Extract forced matchups first
+  let remaining = [...stayByPrevCourt, ...comeOnGroup];
+  const forcedPairsThisRound = [];
+
+  for (let i = 0; i < forcedMatches.length; i++) {
+    if (forcedMatchSatisfiedRound[i] !== null) continue;
+    const { a, b } = forcedMatches[i];
+    if (remaining.includes(a) && remaining.includes(b)) {
+      // Two stayers are each locked to a different court this round — skip until one comes on
+      if (stayGroup.includes(a) && stayGroup.includes(b)) continue;
+      forcedPairsThisRound.push([a, b]);
+      remaining = remaining.filter(t => t !== a && t !== b);
+      forcedMatchSatisfiedRound[i] = roundIdx + 2; // 1-based round number
+    }
+  }
+
+  // Pair remaining teams
+  let remainingPairs;
+  if (forcedPairsThisRound.length === 0) {
+    remainingPairs = pairTeams(stayByPrevCourt, comeOnGroup, playedMatchups)
+      || stayByPrevCourt.map((t, i) => [t, comeOnGroup[i]]);
+  } else if (remaining.length === 4) {
+    const remStay   = remaining.filter(t => stayGroup.includes(t));
+    const remComeOn = remaining.filter(t => comeOnGroup.includes(t));
+    if (remStay.length === 2 && remComeOn.length === 2) {
+      const remStaySorted = [...remStay].sort((a, b) => (prevCourtOf[a] ?? 0) - (prevCourtOf[b] ?? 0));
+      remainingPairs = pairTeams(remStaySorted, remComeOn, playedMatchups)
+        || pairFour(remaining, playedMatchups);
+    } else {
+      remainingPairs = pairFour(remaining, playedMatchups);
+    }
+  } else if (remaining.length === 2) {
+    remainingPairs = [[remaining[0], remaining[1]]];
+  } else {
+    remainingPairs = [];
+  }
+
+  const allPairs = [...forcedPairsThisRound, ...remainingPairs];
+  schedule[roundIdx + 1] = buildRoundFromPairs(allPairs, nextSitting);
+}
+
+function buildRoundFromPairs(pairs, sitting) {
+  const matches = pairs.map(([a, b]) => {
+    playedMatchups.add(matchKey(a, b));
+    return {a, b, winner: null};
+  });
+  return { matches, sitting };
+}
+
+function rerollRound(roundIdx) {
+  if (roundIdx === 0) return;
+  schedule = schedule.slice(0, roundIdx);
+  rebuildPlayedMatchups(roundIdx - 1);
+  forcedMatchSatisfiedRound = forcedMatchSatisfiedRound.map(v =>
+    (v !== null && v > 0 && v <= roundIdx) ? v : null
+  );
+  computeNextRound(roundIdx - 1);
+  renderSchedule();
+  renderForcedList();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderSchedule() {
+  const out = document.getElementById('output');
+  if (!schedule.length) { out.innerHTML=''; return; }
+
+  const html = schedule.slice(0, numRounds).map((rnd, ri) => {
+    const delay = ri * 60;
+    const allWon = rnd.matches.every(m=>m.winner!==null);
+    const matchCells = rnd.matches.map((m, ci) => `
+      <div class="match-cell">
+        <div class="court-label">Court ${ci+1}</div>
+        <div class="matchup">
+          <div class="team-badge">
+            <div class="tbdot" style="background:${colorHex(teamColors[m.a-1])}"></div>
+            <span class="tbname">${teamLabel(m.a)}</span>
+          </div>
+          <div class="match-vs">VS</div>
+          <div class="team-badge">
+            <div class="tbdot" style="background:${colorHex(teamColors[m.b-1])}"></div>
+            <span class="tbname">${teamLabel(m.b)}</span>
+          </div>
+        </div>
+        <div class="winner-row">
+          ${ri === 0 ? `
+          <button class="win-btn ${m.winner===m.a?'selected':''}" onclick="onWinnerSelected(${ri},${ci},${m.a})">
+            ${teamLabel(m.a)} ✓
+          </button>
+          <button class="win-btn ${m.winner===m.b?'selected':''}" onclick="onWinnerSelected(${ri},${ci},${m.b})">
+            ${teamLabel(m.b)} ✓
+          </button>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    const sittingDots = rnd.sitting.map(t=>`
+      <div class="sitting-team">
+        <div class="sitting-dot" style="background:${colorHex(teamColors[t-1])}"></div>
+        ${teamLabel(t)}
+      </div>
+    `).join('');
+
+    const rerollBtn = ri > 0 && ri === schedule.length-1
+      ? `<button class="btn-reroll" onclick="rerollRound(${ri})" title="Re-roll this round's pairings">↻ reroll</button>`
+      : '';
+
+    return `
+      <div class="round-block" style="animation-delay:${delay}ms">
+        <div class="round-head">
+          <div class="rnum">${ri+1}</div>
+          <div class="rhead-meta">
+            <div class="rhead-title">Round ${ri+1}</div>
+            <div class="rhead-sitting"><span>Sitting:</span> ${rnd.sitting.map(t=>teamLabel(t)).join(', ')}</div>
+          </div>
+          ${rerollBtn}
+        </div>
+        <div class="round-body">
+          ${matchCells}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  out.innerHTML = `<div class="rounds-list">${html}</div>`;
+}
+
+function resetOutput() {
+  schedule = [];
+  playedMatchups = new Set();
+  forcedMatchSatisfiedRound = forcedMatches.map(() => null);
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('error-msg').style.display = 'none';
+  renderForcedList();
+}
+</script>
+</body>
+</html>
