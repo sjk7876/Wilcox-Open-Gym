@@ -181,36 +181,6 @@ select:focus { border-color: var(--accent); }
 }
 .wait-dot { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,0.12); }
 
-/* ROUNDS SLIDER */
-.rounds-control {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
-  flex-wrap: wrap;
-}
-.rounds-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.75rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.round-pills { display: flex; gap: 6px; }
-.pill {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: 'DM Mono', monospace;
-  font-size: 0.8rem;
-  padding: 7px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.pill:hover { border-color: var(--accent); color: var(--accent); }
-.pill.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
-
 /* BUTTONS */
 .action-bar {
   display: flex;
@@ -576,13 +546,17 @@ select.force-select { flex: none; width: 150px; }
   <div class="courts-row" id="courts-row"></div>
 
   <!-- STEP 3: WAITING TEAMS -->
-  <div class="section-label">Step 3 — Waiting Teams (Round 1)</div>
+  <div class="section-label">Step 3 — Sitting Out (Round 1)</div>
   <div class="waiting-card">
     <div class="section-label" style="margin:0; flex-shrink:0; white-space:nowrap; border:none;">Sitting out:</div>
     <div class="waiting-slots" id="waiting-display"></div>
   </div>
 
-  <!-- STEP 3.5: FORCE MATCHUPS -->
+  <!-- STEP 4: ROUND 2 BENCH ASSIGNMENT -->
+  <div class="section-label">Step 4 — Round 2 Bench Assignment <span style="font-size:0.6em;color:var(--dim);margin-left:4px;">— who comes on per court</span></div>
+  <div class="courts-row" id="r2bench-row" style="margin-bottom:32px;"></div>
+
+  <!-- STEP 5: FORCE MATCHUPS -->
   <div class="section-label">Force Matchups <span style="font-size:0.6em;color:var(--dim);margin-left:4px;">— optional</span></div>
   <div style="margin-bottom:32px;">
     <div class="force-add-row">
@@ -593,13 +567,6 @@ select.force-select { flex: none; width: 150px; }
       <span class="force-add-err" id="force-add-err"></span>
     </div>
     <div class="force-list" id="force-list"></div>
-  </div>
-
-  <!-- STEP 4: ROUNDS -->
-  <div class="section-label">Step 4 — Number of Rounds</div>
-  <div class="rounds-control">
-    <div class="rounds-label">Rounds to generate:</div>
-    <div class="round-pills" id="round-pills"></div>
   </div>
 
   <!-- ACTION -->
@@ -642,8 +609,10 @@ let teamColors = ['red','blue','yellow','gray','white','black','light blue','gre
 let r1matchups = [[1,2],[3,4],[5,6]];
 // waiting teams for round 1 (1-indexed)
 let r1waiting = [7,8,9];
+// which waiter comes to each court in R2: r2benchOrder[courtIdx] = team number
+let r2benchOrder = [7,8,9];
 
-let numRounds = 7;
+const numRounds = 7;
 
 // Generated schedule: array of round objects
 // { matches: [{a, b, winner}], sitting: [t,...] }
@@ -661,8 +630,7 @@ let forcedMatchSatisfiedRound = [];
 window.onload = () => {
   buildTeamGrid();
   buildCourts();
-  buildPills();
-  syncWaiting();
+  syncWaiting(); // also calls buildR2BenchUI
   buildForceSelects();
 };
 
@@ -689,7 +657,7 @@ function buildTeamGrid() {
 function setTeamColor(idx, color) {
   teamColors[idx] = color;
   document.getElementById(`dot-${idx}`).style.background = colorHex(color);
-  syncWaiting();
+  syncWaiting(); // also calls buildR2BenchUI
   refreshCourts();
   refreshForceSelects();
 }
@@ -734,7 +702,7 @@ function buildCourts() {
 
 function teamOptions(selected) {
   return Array.from({length:NUM_TEAMS},(_,i)=>i+1)
-    .map(t=>`<option value="${t}" ${t===selected?'selected':''}>${t} — ${teamLabel(t)}</option>`)
+    .map(t=>`<option value="${t}" ${t===selected?'selected':''}>${teamLabel(t)}</option>`)
     .join('');
 }
 
@@ -762,6 +730,27 @@ function syncWaiting() {
   for (let t=1; t<=NUM_TEAMS; t++) {
     if (!playing.has(t)) r1waiting.push(t);
   }
+
+  // Re-sync r2benchOrder: keep valid assignments, replace any that are no longer waiting
+  const validSet = new Set(r1waiting);
+  const used = new Set();
+  const newOrder = [];
+  for (let c = 0; c < NUM_COURTS; c++) {
+    const cur = r2benchOrder[c];
+    if (validSet.has(cur) && !used.has(cur)) {
+      newOrder.push(cur);
+      used.add(cur);
+    } else {
+      newOrder.push(null);
+    }
+  }
+  const remaining = r1waiting.filter(t => !used.has(t));
+  let ri = 0;
+  for (let c = 0; c < NUM_COURTS; c++) {
+    if (newOrder[c] === null) newOrder[c] = remaining[ri++];
+  }
+  r2benchOrder = newOrder;
+
   const disp = document.getElementById('waiting-display');
   disp.innerHTML = r1waiting.map(t => `
     <div class="wait-slot">
@@ -769,6 +758,46 @@ function syncWaiting() {
       <span style="font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--muted);text-transform:capitalize;">${teamLabel(t)}</span>
     </div>
   `).join('');
+
+  buildR2BenchUI();
+}
+
+// ─── R2 BENCH ASSIGNMENT ──────────────────────────────────────────────────────
+function buildR2BenchUI() {
+  const row = document.getElementById('r2bench-row');
+  if (!row) return;
+  row.innerHTML = '';
+  for (let c = 0; c < NUM_COURTS; c++) {
+    const card = document.createElement('div');
+    card.className = 'court-card';
+    card.innerHTML = `
+      <div class="court-tag">Court ${c+1}</div>
+      <div class="vs-block">
+        <div class="team-pick-label">Comes on</div>
+        <select id="r2bench-${c}" onchange="updateR2Bench(${c}, this.value)">
+          ${r2benchOptions(r2benchOrder[c])}
+        </select>
+      </div>
+    `;
+    row.appendChild(card);
+  }
+}
+
+function r2benchOptions(selected) {
+  return r1waiting.map(t =>
+    `<option value="${t}" ${t===selected?'selected':''}>${teamLabel(t)}</option>`
+  ).join('');
+}
+
+function updateR2Bench(courtIdx, val) {
+  const newTeam = parseInt(val);
+  const oldTeam = r2benchOrder[courtIdx];
+  const conflictIdx = r2benchOrder.indexOf(newTeam);
+  if (conflictIdx !== -1 && conflictIdx !== courtIdx) {
+    r2benchOrder[conflictIdx] = oldTeam; // swap
+  }
+  r2benchOrder[courtIdx] = newTeam;
+  buildR2BenchUI();
 }
 
 // ─── FORCE MATCHUPS ───────────────────────────────────────────────────────────
@@ -781,7 +810,7 @@ function buildForceSelects() {
 
 function forceTeamOptions(selected) {
   return Array.from({length: NUM_TEAMS}, (_, i) => i+1)
-    .map(t => `<option value="${t}" ${t===selected?'selected':''}>${t} — ${teamLabel(t)}</option>`)
+    .map(t => `<option value="${t}" ${t===selected?'selected':''}>${teamLabel(t)}</option>`)
     .join('');
 }
 
@@ -856,19 +885,6 @@ function pairFour(pool, played) {
     }
   }
   return [[a,b],[c,d]];
-}
-
-// ─── ROUND PILLS ─────────────────────────────────────────────────────────────
-function buildPills() {
-  const cont = document.getElementById('round-pills');
-  cont.innerHTML = '';
-  [5,6,7].forEach(n => {
-    const p = document.createElement('button');
-    p.className = 'pill' + (n===numRounds?' active':'');
-    p.textContent = n;
-    p.onclick = () => { numRounds=n; buildPills(); };
-    cont.appendChild(p);
-  });
 }
 
 // ─── VALIDATION ──────────────────────────────────────────────────────────────
@@ -1021,13 +1037,20 @@ function computeNextRound(roundIdx) {
   let nextSitting, stayGroup, comeOnGroup;
 
   if (roundIdx === 0) {
-    // R1 → R2: the ONLY round where wins matter
-    // Winners stay for R2 (their 2nd game). Losers sit R2. R1-sitters come on.
+    // R1 → R2: winners stay on their court, r2benchOrder assigns one waiter per court
     const winners = rnd.matches.map(m => m.winner);
     const losers  = rnd.matches.map(m => m.a === m.winner ? m.b : m.a);
-    nextSitting = losers;
-    stayGroup   = winners;
-    comeOnGroup = [...sitting];
+    // Pair court-by-court: winners[i] (Court i+1) vs r2benchOrder[i]
+    const allPairs = winners.map((w, i) => [w, r2benchOrder[i]]);
+    // Check forced matches satisfied by R2 assignment
+    forcedMatches.forEach(({ a, b }, i) => {
+      if (forcedMatchSatisfiedRound[i] !== null) return;
+      if (allPairs.some(([pa, pb]) => matchKey(pa, pb) === matchKey(a, b))) {
+        forcedMatchSatisfiedRound[i] = 2;
+      }
+    });
+    schedule[roundIdx + 1] = buildRoundFromPairs(allPairs, losers);
+    return;
   } else {
     // R2+ → fully mechanical, wins don't matter
     // Look at who played THIS round vs who played LAST round:
@@ -1088,8 +1111,24 @@ function computeNextRound(roundIdx) {
     remainingPairs = [];
   }
 
-  const allPairs = [...forcedPairsThisRound, ...remainingPairs];
-  schedule[roundIdx + 1] = buildRoundFromPairs(allPairs, nextSitting);
+  // Re-assign pairs to courts by where each pair's stayer was last round
+  const allPairsUnordered = [...forcedPairsThisRound, ...remainingPairs];
+  const slots = new Array(NUM_COURTS).fill(null);
+  const unplaced = [];
+  for (const pair of allPairsUnordered) {
+    const stayer = pair.find(t => stayGroup.includes(t));
+    const preferred = stayer !== undefined ? prevCourtOf[stayer] : undefined;
+    if (preferred !== undefined && slots[preferred] === null) {
+      slots[preferred] = pair;
+    } else {
+      unplaced.push(pair);
+    }
+  }
+  let ui = 0;
+  for (let c = 0; c < NUM_COURTS; c++) {
+    if (slots[c] === null) slots[c] = unplaced[ui++];
+  }
+  schedule[roundIdx + 1] = buildRoundFromPairs(slots, nextSitting);
 }
 
 function buildRoundFromPairs(pairs, sitting) {
