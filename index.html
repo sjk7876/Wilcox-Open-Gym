@@ -392,7 +392,8 @@ select:focus { border-color: var(--accent); }
 }
 .sitting-dot { width:8px; height:8px; border-radius:50%; opacity:0.4; }
 
-/* Reroll button */
+/* Round action buttons (reroll, swap) */
+.round-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 .btn-reroll {
   background: transparent;
   border: 1px solid var(--border);
@@ -403,9 +404,20 @@ select:focus { border-color: var(--accent); }
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s;
-  margin-left: auto;
 }
 .btn-reroll:hover { border-color: var(--muted); color: var(--text); }
+.btn-swap {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+  padding: 4px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-swap:hover { border-color: var(--text); color: var(--text); }
 
 footer {
   border-top: 1px solid var(--border);
@@ -486,13 +498,18 @@ select.force-select { flex: none; width: 150px; }
 .btn-remove-force {
   background: none;
   border: none;
-  color: var(--dim);
+  color: var(--accent2);
   cursor: pointer;
-  font-size: 1rem;
-  padding: 0;
+  font-size: 1.15rem;
+  padding: 4px 8px;
   line-height: 1;
   transition: color 0.15s;
   flex-shrink: 0;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-remove-force:hover { color: var(--accent2); }
 
@@ -509,6 +526,11 @@ select.force-select { flex: none; width: 150px; }
   /* Prevent iOS auto-zoom on focus */
   select { font-size: 16px; }
 
+  /* Step 1: tighter team rows */
+  .team-row { padding: 7px 10px; gap: 7px; }
+  .color-dot { width: 16px; height: 16px; }
+  .team-num { width: 22px; font-size: 0.65rem; }
+
   /* Force add row: selects share a row, button drops full-width below */
   select.force-select { flex: 1; width: auto; }
   .btn-add-force { width: 100%; text-align: center; padding: 10px 14px; }
@@ -516,17 +538,25 @@ select.force-select { flex: none; width: 150px; }
   /* Action bar: stack buttons full-width */
   .action-bar { flex-direction: column; align-items: stretch; }
   .btn-gen { text-align: center; padding: 14px; }
-  .btn-reset { text-align: center; }
+  .btn-reset { text-align: center; padding: 12px; }
 
   /* Win buttons: larger tap target */
-  .win-btn { padding: 10px 8px; font-size: 0.75rem; min-height: 40px; }
+  .win-btn { padding: 10px 8px; font-size: 0.75rem; min-height: 44px; }
 
-  /* Round head: allow wrap so reroll button doesn't overflow */
+  /* Round head: allow wrap so action buttons don't overflow */
   .round-head { flex-wrap: wrap; row-gap: 8px; }
-  .btn-reroll { margin-left: 0; width: 100%; text-align: center; }
+  .round-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
+  .btn-reroll { padding: 10px 12px; }
+  .btn-swap { padding: 10px 12px; }
 
   /* Force items: prevent long team names from overflowing */
   .force-team { min-width: 0; }
+
+  /* Remove-force button: bigger tap target on touch screens */
+  .btn-remove-force { min-width: 44px; min-height: 44px; padding: 8px; }
+
+  /* Force badge: slightly larger text */
+  .force-badge { font-size: 0.7rem; padding: 4px 8px; }
 }
 </style>
 </head>
@@ -626,12 +656,47 @@ let forcedMatches = []; // [{ a: teamNum, b: teamNum }]
 // 1-based round number when satisfied, null = pending, -1 = failed
 let forcedMatchSatisfiedRound = [];
 
+// ─── PERSISTENCE ─────────────────────────────────────────────────────────────
+const SAVE_KEY = 'wilcox_state_v1';
+
+function saveState() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      teamColors,
+      r1matchups,
+      r2benchOrder,
+      forcedMatches,
+      forcedMatchSatisfiedRound,
+      schedule,
+      playedMatchups: [...playedMatchups],
+    }));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.teamColors?.length === NUM_TEAMS)      teamColors = s.teamColors;
+    if (s.r1matchups?.length === NUM_COURTS)     r1matchups = s.r1matchups;
+    if (s.r2benchOrder?.length === NUM_COURTS)   r2benchOrder = s.r2benchOrder;
+    if (Array.isArray(s.forcedMatches))          forcedMatches = s.forcedMatches;
+    if (Array.isArray(s.forcedMatchSatisfiedRound)) forcedMatchSatisfiedRound = s.forcedMatchSatisfiedRound;
+    if (Array.isArray(s.schedule))               schedule = s.schedule;
+    if (Array.isArray(s.playedMatchups))         playedMatchups = new Set(s.playedMatchups);
+  } catch(e) {}
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.onload = () => {
+  loadState();
   buildTeamGrid();
   buildCourts();
   syncWaiting(); // also calls buildR2BenchUI
   buildForceSelects();
+  renderSchedule();
+  renderForcedList();
 };
 
 // ─── TEAM GRID ────────────────────────────────────────────────────────────────
@@ -660,6 +725,7 @@ function setTeamColor(idx, color) {
   syncWaiting(); // also calls buildR2BenchUI
   refreshCourts();
   refreshForceSelects();
+  saveState();
 }
 
 function colorHex(name) {
@@ -722,6 +788,7 @@ function updateR1(court, side, val) {
   if (side==='a') r1matchups[court][0] = parseInt(val);
   else r1matchups[court][1] = parseInt(val);
   syncWaiting();
+  saveState();
 }
 
 function syncWaiting() {
@@ -798,6 +865,7 @@ function updateR2Bench(courtIdx, val) {
   }
   r2benchOrder[courtIdx] = newTeam;
   buildR2BenchUI();
+  saveState();
 }
 
 // ─── FORCE MATCHUPS ───────────────────────────────────────────────────────────
@@ -836,12 +904,14 @@ function addForcedMatch() {
   forcedMatches.push({ a, b });
   forcedMatchSatisfiedRound.push(null);
   renderForcedList();
+  saveState();
 }
 
 function removeForcedMatch(idx) {
   forcedMatches.splice(idx, 1);
   forcedMatchSatisfiedRound.splice(idx, 1);
   renderForcedList();
+  saveState();
 }
 
 function renderForcedList() {
@@ -978,6 +1048,7 @@ function generate() {
 
   renderSchedule();
   renderForcedList();
+  saveState();
 }
 
 function onWinnerSelected(roundIdx, courtIdx, winner) {
@@ -1019,6 +1090,7 @@ function onWinnerSelected(roundIdx, courtIdx, winner) {
 
   renderSchedule();
   renderForcedList();
+  saveState();
 }
 
 function rebuildPlayedMatchups(upToRound) {
@@ -1039,6 +1111,7 @@ function computeNextRound(roundIdx) {
   if (roundIdx === 0) {
     // R1 → R2: winners stay on their court, r2benchOrder assigns one waiter per court
     const winners = rnd.matches.map(m => m.winner);
+    if (winners.some(w => w === null)) return; // not all R1 winners set yet
     const losers  = rnd.matches.map(m => m.a === m.winner ? m.b : m.a);
     // Pair court-by-court: winners[i] (Court i+1) vs r2benchOrder[i]
     const allPairs = winners.map((w, i) => [w, r2benchOrder[i]]);
@@ -1149,6 +1222,7 @@ function rerollRound(roundIdx) {
   computeNextRound(roundIdx - 1);
   renderSchedule();
   renderForcedList();
+  saveState();
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
@@ -1197,6 +1271,11 @@ function renderSchedule() {
       ? `<button class="btn-reroll" onclick="rerollRound(${ri})" title="Re-roll this round's pairings">↻ reroll</button>`
       : '';
 
+    const swapBtns = `
+      <button class="btn-swap" onclick="swapCourts(${ri},0,1)" title="Swap courts 1 and 2">1↔2</button>
+      <button class="btn-swap" onclick="swapCourts(${ri},1,2)" title="Swap courts 2 and 3">2↔3</button>
+    `;
+
     return `
       <div class="round-block" style="animation-delay:${delay}ms">
         <div class="round-head">
@@ -1205,7 +1284,7 @@ function renderSchedule() {
             <div class="rhead-title">Round ${ri+1}</div>
             <div class="rhead-sitting"><span>Sitting:</span> ${rnd.sitting.map(t=>teamLabel(t)).join(', ')}</div>
           </div>
-          ${rerollBtn}
+          <div class="round-actions">${swapBtns}${rerollBtn}</div>
         </div>
         <div class="round-body">
           ${matchCells}
@@ -1217,6 +1296,24 @@ function renderSchedule() {
   out.innerHTML = `<div class="rounds-list">${html}</div>`;
 }
 
+function swapCourts(roundIdx, courtA, courtB) {
+  const matches = schedule[roundIdx].matches;
+  [matches[courtA], matches[courtB]] = [matches[courtB], matches[courtA]];
+
+  // Re-cascade everything downstream
+  schedule = schedule.slice(0, roundIdx + 1);
+  rebuildPlayedMatchups(roundIdx);
+  forcedMatchSatisfiedRound = forcedMatchSatisfiedRound.map((v) =>
+    (v !== null && v > 0 && v > roundIdx + 1) ? null : v
+  );
+  for (let i = roundIdx; i < numRounds - 1; i++) {
+    computeNextRound(i);
+  }
+  renderSchedule();
+  renderForcedList();
+  saveState();
+}
+
 function resetOutput() {
   schedule = [];
   playedMatchups = new Set();
@@ -1224,6 +1321,7 @@ function resetOutput() {
   document.getElementById('output').innerHTML = '';
   document.getElementById('error-msg').style.display = 'none';
   renderForcedList();
+  saveState();
 }
 </script>
 </body>
