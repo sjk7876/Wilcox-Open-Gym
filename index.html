@@ -1317,7 +1317,8 @@ function swapCourts(roundIdx, courtA, courtB) {
 function resetOutput() {
   schedule = [];
   playedMatchups = new Set();
-  forcedMatchSatisfiedRound = forcedMatches.map(() => null);
+  forcedMatches = [];
+  forcedMatchSatisfiedRound = [];
   document.getElementById('output').innerHTML = '';
   document.getElementById('error-msg').style.display = 'none';
   renderForcedList();
