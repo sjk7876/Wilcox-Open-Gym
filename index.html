@@ -216,6 +216,8 @@ select:focus { border-color: var(--accent); }
   transition: all 0.15s;
 }
 .btn-reset:hover { border-color: var(--accent2); color: var(--accent2); }
+.btn-new-week { border-color: rgba(255,95,61,0.4); color: var(--accent2); }
+.btn-new-week:hover { border-color: var(--accent2); background: rgba(255,95,61,0.08); }
 .error-msg {
   font-family: 'DM Mono', monospace;
   font-size: 0.75rem;
@@ -603,6 +605,7 @@ select.force-select { flex: none; width: 150px; }
   <div class="action-bar">
     <button class="btn-gen" onclick="generate()">⚡ Generate Schedule</button>
     <button class="btn-reset" onclick="resetOutput()">Clear</button>
+    <button class="btn-reset btn-new-week" onclick="startNewWeek()">↺ New Week</button>
     <div class="error-msg" id="error-msg"></div>
   </div>
 
@@ -1321,6 +1324,28 @@ function resetOutput() {
   forcedMatchSatisfiedRound = [];
   document.getElementById('output').innerHTML = '';
   document.getElementById('error-msg').style.display = 'none';
+  renderForcedList();
+  saveState();
+}
+
+function startNewWeek() {
+  if (!confirm('Start a new week? This wipes team colors, Round 1 matchups, bench order, forced matches, and the generated schedule.')) return;
+
+  teamColors = ['red','blue','yellow','gray','white','black','light blue','green','pink'];
+  r1matchups = [[1,2],[3,4],[5,6]];
+  r2benchOrder = [7,8,9];
+  schedule = [];
+  playedMatchups = new Set();
+  forcedMatches = [];
+  forcedMatchSatisfiedRound = [];
+
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('error-msg').style.display = 'none';
+
+  buildTeamGrid();
+  buildCourts();
+  syncWaiting(); // also calls buildR2BenchUI
+  buildForceSelects();
   renderForcedList();
   saveState();
 }
