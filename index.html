@@ -56,6 +56,25 @@ h1 {
   margin-top: 8px;
 }
 
+/* TEAM COUNT */
+.count-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.count-row select { flex: none; width: 70px; }
+.empty-note {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 /* SECTION LABELS */
 .section-label {
   font-family: 'DM Mono', monospace;
@@ -120,7 +139,7 @@ select:focus { border-color: var(--accent); }
 /* ROUND 1 SETUP */
 .courts-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--courts, 3), 1fr);
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -276,7 +295,7 @@ select:focus { border-color: var(--accent); }
 
 .round-body {
   display: grid;
-  grid-template-columns: repeat(3, 1fr) 1px;
+  grid-template-columns: repeat(var(--courts, 3), 1fr) 1px;
 }
 @media(max-width:640px){ .round-body{ grid-template-columns:1fr; } }
 
@@ -566,11 +585,15 @@ select.force-select { flex: none; width: 150px; }
 <div class="wrap">
   <header>
     <h1>WILCOX OPEN GYM</h1>
-    <div class="header-sub">Volleyball Schedule Generator &mdash; 9 Teams · 3 Courts · 2 On / 1 Off</div>
+    <div class="header-sub" id="header-sub"></div>
   </header>
 
   <!-- STEP 1: TEAM COLORS -->
   <div class="section-label">Step 1 — Assign Team Colors</div>
+  <div class="count-row">
+    <label for="num-teams">Teams playing:</label>
+    <select id="num-teams" onchange="setNumTeams(parseInt(this.value))"></select>
+  </div>
   <div class="team-grid" id="team-grid"></div>
 
   <!-- STEP 2: ROUND 1 MATCHUPS -->
@@ -631,18 +654,36 @@ const COLORS = [
   { name:'orange',    hex:'#fb8c00' },
 ];
 
-const NUM_TEAMS = 9;
-const NUM_COURTS = 3;
+const MAX_TEAMS = 9;
+const MIN_TEAMS = 4;
+const MAX_COURTS = 3;
 
-// team assignments: teamColors[i] = color name for team i+1
-let teamColors = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
+// Derived from the team count (see applyTeamCount): courts fill up to MAX_COURTS,
+// whoever doesn't fit sits. 9 teams = 3 courts / 3 sitting, 8 = 3 / 2, 5 = 2 / 1, etc.
+let NUM_TEAMS = 9;
+let NUM_COURTS = 3;
+let NUM_SITTING = 3;
 
-// round 1 matchups: [[t1,t2],[t3,t4],[t5,t6]] (1-indexed team numbers)
-let r1matchups = [[1,2],[3,4],[5,6]];
+function applyTeamCount(n) {
+  NUM_TEAMS = n;
+  NUM_COURTS = Math.min(MAX_COURTS, Math.floor(n / 2));
+  NUM_SITTING = n - NUM_COURTS * 2;
+  document.documentElement.style.setProperty('--courts', NUM_COURTS);
+}
+
+const DEFAULT_COLORS = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
+const defaultR1 = () => Array.from({length: NUM_COURTS}, (_, c) => [c*2+1, c*2+2]);
+const defaultBench = () => Array.from({length: NUM_SITTING}, (_, i) => NUM_COURTS*2 + i + 1);
+
+// team assignments: teamColors[i] = color name for team i+1 (always MAX_TEAMS long, first NUM_TEAMS used)
+let teamColors = [...DEFAULT_COLORS];
+
+// round 1 matchups: [[t1,t2],[t3,t4],[t5,t6]] (1-indexed team numbers), one per court
+let r1matchups = defaultR1();
 // waiting teams for round 1 (1-indexed)
-let r1waiting = [7,8,9];
-// which waiter comes to each court in R2: r2benchOrder[courtIdx] = team number
-let r2benchOrder = [7,8,9];
+let r1waiting = defaultBench();
+// which waiter comes to each of the first NUM_SITTING courts in R2: r2benchOrder[courtIdx] = team number
+let r2benchOrder = defaultBench();
 
 const numRounds = 7;
 
@@ -664,6 +705,7 @@ const SAVE_KEY = 'wilcox_state_v1';
 function saveState() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
+      numTeams: NUM_TEAMS,
       teamColors,
       r1matchups,
       r2benchOrder,
@@ -680,9 +722,10 @@ function loadState() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
     const s = JSON.parse(raw);
-    if (s.teamColors?.length === NUM_TEAMS)      teamColors = s.teamColors;
+    if (s.numTeams >= MIN_TEAMS && s.numTeams <= MAX_TEAMS) applyTeamCount(s.numTeams);
+    if (s.teamColors?.length === MAX_TEAMS)      teamColors = s.teamColors;
     if (s.r1matchups?.length === NUM_COURTS)     r1matchups = s.r1matchups;
-    if (s.r2benchOrder?.length === NUM_COURTS)   r2benchOrder = s.r2benchOrder;
+    if (s.r2benchOrder?.length === NUM_SITTING)  r2benchOrder = s.r2benchOrder;
     if (Array.isArray(s.forcedMatches))          forcedMatches = s.forcedMatches;
     if (Array.isArray(s.forcedMatchSatisfiedRound)) forcedMatchSatisfiedRound = s.forcedMatchSatisfiedRound;
     if (Array.isArray(s.schedule))               schedule = s.schedule;
@@ -692,7 +735,9 @@ function loadState() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.onload = () => {
+  applyTeamCount(NUM_TEAMS);
   loadState();
+  buildTeamCountSelect();
   buildTeamGrid();
   buildCourts();
   syncWaiting(); // also calls buildR2BenchUI
@@ -700,6 +745,45 @@ window.onload = () => {
   renderSchedule();
   renderForcedList();
 };
+
+// ─── TEAM COUNT ───────────────────────────────────────────────────────────────
+function buildTeamCountSelect() {
+  const sel = document.getElementById('num-teams');
+  sel.innerHTML = Array.from({length: MAX_TEAMS - MIN_TEAMS + 1}, (_, i) => MAX_TEAMS - i)
+    .map(n => `<option value="${n}" ${n===NUM_TEAMS?'selected':''}>${n}</option>`).join('');
+  const sit = NUM_SITTING === 0 ? 'everyone plays every round' : `${NUM_SITTING} sitting per round`;
+  document.getElementById('header-sub').innerHTML =
+    `Volleyball Schedule Generator &mdash; ${NUM_TEAMS} Teams · ${NUM_COURTS} Courts · ${sit}`;
+}
+
+function setNumTeams(n) {
+  if (n === NUM_TEAMS) return;
+  if (schedule.length && !confirm('Change the team count? This clears Round 1 matchups, bench order, and the generated schedule.')) {
+    document.getElementById('num-teams').value = NUM_TEAMS;
+    return;
+  }
+  applyTeamCount(n);
+  r1matchups = defaultR1();
+  r2benchOrder = defaultBench();
+  forcedMatches = forcedMatches.filter(fm => fm.a <= n && fm.b <= n);
+  forcedMatchSatisfiedRound = forcedMatches.map(() => null);
+  schedule = [];
+  playedMatchups = new Set();
+  rebuildAll();
+  saveState();
+}
+
+// Rebuild every setup widget from current state
+function rebuildAll() {
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('error-msg').style.display = 'none';
+  buildTeamCountSelect();
+  buildTeamGrid();
+  buildCourts();
+  syncWaiting(); // also calls buildR2BenchUI
+  buildForceSelects();
+  renderForcedList();
+}
 
 // ─── TEAM GRID ────────────────────────────────────────────────────────────────
 function buildTeamGrid() {
@@ -804,7 +888,7 @@ function syncWaiting() {
   const validSet = new Set(r1waiting);
   const used = new Set();
   const newOrder = [];
-  for (let c = 0; c < NUM_COURTS; c++) {
+  for (let c = 0; c < NUM_SITTING; c++) {
     const cur = r2benchOrder[c];
     if (validSet.has(cur) && !used.has(cur)) {
       newOrder.push(cur);
@@ -815,13 +899,15 @@ function syncWaiting() {
   }
   const remaining = r1waiting.filter(t => !used.has(t));
   let ri = 0;
-  for (let c = 0; c < NUM_COURTS; c++) {
+  for (let c = 0; c < NUM_SITTING; c++) {
     if (newOrder[c] === null) newOrder[c] = remaining[ri++];
   }
   r2benchOrder = newOrder;
 
   const disp = document.getElementById('waiting-display');
-  disp.innerHTML = r1waiting.map(t => `
+  disp.innerHTML = r1waiting.length === 0
+    ? '<span class="empty-note">Nobody — every team is on a court.</span>'
+    : r1waiting.map(t => `
     <div class="wait-slot">
       <div class="wait-dot" style="background:${colorHex(teamColors[t-1])}"></div>
       <span style="font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--muted);text-transform:capitalize;">${teamLabel(t)}</span>
@@ -836,7 +922,11 @@ function buildR2BenchUI() {
   const row = document.getElementById('r2bench-row');
   if (!row) return;
   row.innerHTML = '';
-  for (let c = 0; c < NUM_COURTS; c++) {
+  if (NUM_SITTING === 0) {
+    row.innerHTML = '<div class="empty-note">Everyone plays every round — no bench to assign.</div>';
+    return;
+  }
+  for (let c = 0; c < NUM_SITTING; c++) {
     const card = document.createElement('div');
     card.className = 'court-card';
     card.innerHTML = `
@@ -1104,6 +1194,8 @@ function rebuildPlayedMatchups(upToRound) {
 
 function computeNextRound(roundIdx) {
   if (roundIdx + 1 >= numRounds) return;
+  // The 9-team logic below is the original; fewer teams use the generalized version.
+  if (NUM_TEAMS !== MAX_TEAMS) return computeNextRoundFewerTeams(roundIdx);
 
   const rnd = schedule[roundIdx];
   const sitting = rnd.sitting;
@@ -1206,6 +1298,89 @@ function computeNextRound(roundIdx) {
   schedule[roundIdx + 1] = buildRoundFromPairs(slots, nextSitting);
 }
 
+// ─── SCHEDULING FOR FEWER THAN 9 TEAMS ───────────────────────────────────────
+// Same ideas as the 9-team logic, but the sitting group is no longer exactly a third
+// of the field, so who sits is picked by longest streak instead of "played twice".
+function allMatchings(arr) {
+  if (!arr.length) return [[]];
+  const [first, ...rest] = arr;
+  const out = [];
+  rest.forEach((partner, i) => {
+    const others = rest.filter((_, j) => j !== i);
+    allMatchings(others).forEach(m => out.push([[first, partner], ...m]));
+  });
+  return out;
+}
+
+function computeNextRoundFewerTeams(roundIdx) {
+  const rnd = schedule[roundIdx];
+  const prevCourtOf = {};
+  rnd.matches.forEach((m, ci) => { prevCourtOf[m.a] = ci; prevCourtOf[m.b] = ci; });
+
+  if (roundIdx === 0) {
+    // R1 → R2: winners on the first NUM_SITTING courts face the user-assigned waiters.
+    // Remaining courts' winners face a loser from a different court; leftover losers sit.
+    const winners = rnd.matches.map(m => m.winner);
+    if (winners.some(w => w === null)) return;
+    const losers = rnd.matches.map(m => m.a === m.winner ? m.b : m.a);
+
+    const pairs = [];
+    for (let c = 0; c < NUM_SITTING; c++) pairs.push([winners[c], r2benchOrder[c]]);
+    let nextSitting = [];
+    const extra = NUM_COURTS - NUM_SITTING;
+    if (extra > 0) {
+      const perm = shuffle(permutations(losers)).find(p =>
+        p.slice(0, extra).every((l, j) => l !== losers[NUM_SITTING + j]));
+      for (let j = 0; j < extra; j++) pairs.push([winners[NUM_SITTING + j], perm[j]]);
+      nextSitting = perm.slice(extra);
+    }
+
+    forcedMatches.forEach(({ a, b }, i) => {
+      if (forcedMatchSatisfiedRound[i] !== null) return;
+      if (pairs.some(([pa, pb]) => matchKey(pa, pb) === matchKey(a, b))) forcedMatchSatisfiedRound[i] = 2;
+    });
+    schedule[roundIdx + 1] = buildRoundFromPairs(pairs, nextSitting);
+    return;
+  }
+
+  // R2+: sit whoever has played the most rounds in a row (ties → most games, then random)
+  const playingNow = rnd.matches.flatMap(m => [m.a, m.b]);
+  const played = (t, r) => schedule[r].matches.some(m => m.a === t || m.b === t);
+  const streak = t => { let n = 0; for (let r = roundIdx; r >= 0 && played(t, r); r--) n++; return n; };
+  const games  = t => schedule.slice(0, roundIdx + 1).filter((_, r) => played(t, r)).length;
+  const nextSitting = shuffle(playingNow)
+    .sort((x, y) => streak(y) - streak(x) || games(y) - games(x))
+    .slice(0, NUM_SITTING);
+
+  const stayGroup = playingNow.filter(t => !nextSitting.includes(t));
+  const available = [...stayGroup, ...rnd.sitting];
+  const pending = forcedMatches.filter((_, i) => forcedMatchSatisfiedRound[i] === null);
+
+  // Score every possible pairing: rematches hurt, forced matchups help
+  let best = null;
+  for (const matching of allMatchings(available)) {
+    const rematches = matching.filter(([a, b]) => playedMatchups.has(matchKey(a, b))).length;
+    const forcedHits = pending.filter(f => matching.some(([a, b]) => matchKey(a, b) === matchKey(f.a, f.b))).length;
+    // Assign pairs to courts so staying teams keep their court where possible
+    for (const order of permutations(Array.from({length: NUM_COURTS}, (_, c) => c))) {
+      let moves = 0;
+      matching.forEach((pair, i) => pair.forEach(t => {
+        if (stayGroup.includes(t) && prevCourtOf[t] !== order[i]) moves++;
+      }));
+      const score = rematches * 1000 - forcedHits * 5000 + moves * 10 + Math.random();
+      if (!best || score < best.score) best = { score, matching, order };
+    }
+  }
+
+  const slots = new Array(NUM_COURTS);
+  best.matching.forEach((pair, i) => { slots[best.order[i]] = pair; });
+  forcedMatches.forEach(({ a, b }, i) => {
+    if (forcedMatchSatisfiedRound[i] !== null) return;
+    if (slots.some(([x, y]) => matchKey(x, y) === matchKey(a, b))) forcedMatchSatisfiedRound[i] = roundIdx + 2;
+  });
+  schedule[roundIdx + 1] = buildRoundFromPairs(slots, nextSitting);
+}
+
 function buildRoundFromPairs(pairs, sitting) {
   const matches = pairs.map(([a, b]) => {
     playedMatchups.add(matchKey(a, b));
@@ -1273,10 +1448,9 @@ function renderSchedule() {
       ? `<button class="btn-reroll" onclick="rerollRound(${ri})" title="Re-roll this round's pairings">↻ reroll</button>`
       : '';
 
-    const swapBtns = `
-      <button class="btn-swap" onclick="swapCourts(${ri},0,1)" title="Swap courts 1 and 2">1↔2</button>
-      <button class="btn-swap" onclick="swapCourts(${ri},1,2)" title="Swap courts 2 and 3">2↔3</button>
-    `;
+    const swapBtns = Array.from({length: NUM_COURTS - 1}, (_, c) => `
+      <button class="btn-swap" onclick="swapCourts(${ri},${c},${c+1})" title="Swap courts ${c+1} and ${c+2}">${c+1}↔${c+2}</button>
+    `).join('');
 
     return `
       <div class="round-block" style="animation-delay:${delay}ms">
@@ -1284,7 +1458,7 @@ function renderSchedule() {
           <div class="rnum">${ri+1}</div>
           <div class="rhead-meta">
             <div class="rhead-title">Round ${ri+1}</div>
-            <div class="rhead-sitting"><span>Sitting:</span> ${rnd.sitting.map(t=>teamLabel(t)).join(', ')}</div>
+            <div class="rhead-sitting"><span>Sitting:</span> ${rnd.sitting.length ? rnd.sitting.map(t=>teamLabel(t)).join(', ') : '—'}</div>
           </div>
           <div class="round-actions">${swapBtns}${rerollBtn}</div>
         </div>
@@ -1317,24 +1491,18 @@ function swapCourts(roundIdx, courtA, courtB) {
 }
 
 function startNewWeek() {
-  if (!confirm('Start a new week? This wipes team colors, Round 1 matchups, bench order, forced matches, and the generated schedule.')) return;
+  if (!confirm('Start a new week? This wipes team count, team colors, Round 1 matchups, bench order, forced matches, and the generated schedule.')) return;
 
-  teamColors = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
-  r1matchups = [[1,2],[3,4],[5,6]];
-  r2benchOrder = [7,8,9];
+  applyTeamCount(MAX_TEAMS);
+  teamColors = [...DEFAULT_COLORS];
+  r1matchups = defaultR1();
+  r2benchOrder = defaultBench();
   schedule = [];
   playedMatchups = new Set();
   forcedMatches = [];
   forcedMatchSatisfiedRound = [];
 
-  document.getElementById('output').innerHTML = '';
-  document.getElementById('error-msg').style.display = 'none';
-
-  buildTeamGrid();
-  buildCourts();
-  syncWaiting(); // also calls buildR2BenchUI
-  buildForceSelects();
-  renderForcedList();
+  rebuildAll();
   saveState();
 }
 </script>
