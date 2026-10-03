@@ -604,7 +604,6 @@ select.force-select { flex: none; width: 150px; }
   <!-- ACTION -->
   <div class="action-bar">
     <button class="btn-gen" onclick="generate()">⚡ Generate Schedule</button>
-    <button class="btn-reset" onclick="resetOutput()">Clear</button>
     <button class="btn-reset btn-new-week" onclick="startNewWeek()">↺ New Week</button>
     <div class="error-msg" id="error-msg"></div>
   </div>
@@ -636,7 +635,7 @@ const NUM_TEAMS = 9;
 const NUM_COURTS = 3;
 
 // team assignments: teamColors[i] = color name for team i+1
-let teamColors = ['red','blue','yellow','gray','white','black','light blue','green','pink'];
+let teamColors = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
 
 // round 1 matchups: [[t1,t2],[t3,t4],[t5,t6]] (1-indexed team numbers)
 let r1matchups = [[1,2],[3,4],[5,6]];
@@ -1317,21 +1316,10 @@ function swapCourts(roundIdx, courtA, courtB) {
   saveState();
 }
 
-function resetOutput() {
-  schedule = [];
-  playedMatchups = new Set();
-  forcedMatches = [];
-  forcedMatchSatisfiedRound = [];
-  document.getElementById('output').innerHTML = '';
-  document.getElementById('error-msg').style.display = 'none';
-  renderForcedList();
-  saveState();
-}
-
 function startNewWeek() {
   if (!confirm('Start a new week? This wipes team colors, Round 1 matchups, bench order, forced matches, and the generated schedule.')) return;
 
-  teamColors = ['red','blue','yellow','gray','white','black','light blue','green','pink'];
+  teamColors = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
   r1matchups = [[1,2],[3,4],[5,6]];
   r2benchOrder = [7,8,9];
   schedule = [];
