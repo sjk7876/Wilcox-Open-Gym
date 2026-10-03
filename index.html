@@ -69,6 +69,7 @@ h1 {
   letter-spacing: 0.1em;
 }
 .count-row select { flex: none; width: 70px; }
+.count-row label { white-space: nowrap; }
 .empty-note {
   font-family: 'DM Mono', monospace;
   font-size: 0.78rem;
@@ -593,6 +594,8 @@ select.force-select { flex: none; width: 150px; }
   <div class="count-row">
     <label for="num-teams">Teams playing:</label>
     <select id="num-teams" onchange="setNumTeams(parseInt(this.value))"></select>
+    <label for="priority-team" style="margin-left:14px;">Priority team:</label>
+    <select id="priority-team" style="width:130px;" onchange="setPriorityTeam(this.value)"></select>
   </div>
   <div class="team-grid" id="team-grid"></div>
 
@@ -671,6 +674,11 @@ function applyTeamCount(n) {
   document.documentElement.style.setProperty('--courts', NUM_COURTS);
 }
 
+// Host / priority team (team number or null): sits as little as the 3-in-a-row cap allows.
+// Only applies when fewer than MAX_TEAMS are playing.
+let priorityTeam = null;
+const PRIORITY_MAX_RUN = 3;
+
 const DEFAULT_COLORS = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
 const defaultR1 = () => Array.from({length: NUM_COURTS}, (_, c) => [c*2+1, c*2+2]);
 const defaultBench = () => Array.from({length: NUM_SITTING}, (_, i) => NUM_COURTS*2 + i + 1);
@@ -706,6 +714,7 @@ function saveState() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       numTeams: NUM_TEAMS,
+      priorityTeam,
       teamColors,
       r1matchups,
       r2benchOrder,
@@ -723,6 +732,7 @@ function loadState() {
     if (!raw) return;
     const s = JSON.parse(raw);
     if (s.numTeams >= MIN_TEAMS && s.numTeams <= MAX_TEAMS) applyTeamCount(s.numTeams);
+    if (s.priorityTeam >= 1 && s.priorityTeam <= NUM_TEAMS && NUM_TEAMS < MAX_TEAMS) priorityTeam = s.priorityTeam;
     if (s.teamColors?.length === MAX_TEAMS)      teamColors = s.teamColors;
     if (s.r1matchups?.length === NUM_COURTS)     r1matchups = s.r1matchups;
     if (s.r2benchOrder?.length === NUM_SITTING)  r2benchOrder = s.r2benchOrder;
@@ -738,6 +748,7 @@ window.onload = () => {
   applyTeamCount(NUM_TEAMS);
   loadState();
   buildTeamCountSelect();
+  buildPrioritySelect();
   buildTeamGrid();
   buildCourts();
   syncWaiting(); // also calls buildR2BenchUI
@@ -756,6 +767,20 @@ function buildTeamCountSelect() {
     `Volleyball Schedule Generator &mdash; ${NUM_TEAMS} Teams · ${NUM_COURTS} Courts · ${sit}`;
 }
 
+function buildPrioritySelect() {
+  const sel = document.getElementById('priority-team');
+  const off = NUM_TEAMS >= MAX_TEAMS;
+  sel.disabled = off;
+  sel.title = off ? 'Priority only applies when fewer than 9 teams are playing' : '';
+  sel.innerHTML = `<option value="">None</option>` + Array.from({length: NUM_TEAMS}, (_, i) => i + 1)
+    .map(t => `<option value="${t}" ${t===priorityTeam?'selected':''}>${teamLabel(t)}</option>`).join('');
+}
+
+function setPriorityTeam(val) {
+  priorityTeam = val ? parseInt(val) : null;
+  saveState();
+}
+
 function setNumTeams(n) {
   if (n === NUM_TEAMS) return;
   if (schedule.length && !confirm('Change the team count? This clears Round 1 matchups, bench order, and the generated schedule.')) {
@@ -763,6 +788,7 @@ function setNumTeams(n) {
     return;
   }
   applyTeamCount(n);
+  priorityTeam = null;
   r1matchups = defaultR1();
   r2benchOrder = defaultBench();
   forcedMatches = forcedMatches.filter(fm => fm.a <= n && fm.b <= n);
@@ -778,6 +804,7 @@ function rebuildAll() {
   document.getElementById('output').innerHTML = '';
   document.getElementById('error-msg').style.display = 'none';
   buildTeamCountSelect();
+  buildPrioritySelect();
   buildTeamGrid();
   buildCourts();
   syncWaiting(); // also calls buildR2BenchUI
@@ -975,6 +1002,7 @@ function forceTeamOptions(selected) {
 }
 
 function refreshForceSelects() {
+  buildPrioritySelect(); // team labels changed
   ['force-a', 'force-b'].forEach(id => {
     const sel = document.getElementById(id);
     const cur = parseInt(sel.value) || 1;
@@ -1067,6 +1095,11 @@ function validate() {
       err.textContent = 'Error: A team cannot play itself.';
       return false;
     }
+  }
+  if (priorityTeam && NUM_TEAMS < MAX_TEAMS && !playing.includes(priorityTeam)) {
+    err.style.display='block';
+    err.textContent = 'Error: The priority team has to play in Round 1 — put them on a court instead of the bench.';
+    return false;
   }
   err.style.display='none';
   return true;
@@ -1329,8 +1362,10 @@ function computeNextRoundFewerTeams(roundIdx) {
     let nextSitting = [];
     const extra = NUM_COURTS - NUM_SITTING;
     if (extra > 0) {
-      const perm = shuffle(permutations(losers)).find(p =>
+      // Never pair a winner with the loser from their own court; keep the priority team off the bench if possible
+      const valid = shuffle(permutations(losers)).filter(p =>
         p.slice(0, extra).every((l, j) => l !== losers[NUM_SITTING + j]));
+      const perm = valid.find(p => !p.slice(extra).includes(priorityTeam)) || valid[0];
       for (let j = 0; j < extra; j++) pairs.push([winners[NUM_SITTING + j], perm[j]]);
       nextSitting = perm.slice(extra);
     }
@@ -1348,8 +1383,10 @@ function computeNextRoundFewerTeams(roundIdx) {
   const played = (t, r) => schedule[r].matches.some(m => m.a === t || m.b === t);
   const streak = t => { let n = 0; for (let r = roundIdx; r >= 0 && played(t, r); r--) n++; return n; };
   const games  = t => schedule.slice(0, roundIdx + 1).filter((_, r) => played(t, r)).length;
+  // Priority team is the last pick to sit until it hits the run cap
+  const shielded = t => t === priorityTeam && streak(t) < PRIORITY_MAX_RUN ? 1 : 0;
   const nextSitting = shuffle(playingNow)
-    .sort((x, y) => streak(y) - streak(x) || games(y) - games(x))
+    .sort((x, y) => shielded(x) - shielded(y) || streak(y) - streak(x) || games(y) - games(x))
     .slice(0, NUM_SITTING);
 
   const stayGroup = playingNow.filter(t => !nextSitting.includes(t));
@@ -1491,9 +1528,10 @@ function swapCourts(roundIdx, courtA, courtB) {
 }
 
 function startNewWeek() {
-  if (!confirm('Start a new week? This wipes team count, team colors, Round 1 matchups, bench order, forced matches, and the generated schedule.')) return;
+  if (!confirm('Start a new week? This wipes team count, priority team, team colors, Round 1 matchups, bench order, forced matches, and the generated schedule.')) return;
 
   applyTeamCount(MAX_TEAMS);
+  priorityTeam = null;
   teamColors = [...DEFAULT_COLORS];
   r1matchups = defaultR1();
   r2benchOrder = defaultBench();
