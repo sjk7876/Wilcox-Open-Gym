@@ -306,6 +306,18 @@ select:focus { border-color: var(--accent); }
   position: relative;
 }
 .match-cell:nth-child(3) { border-right: none; }
+/* Court changeover: a team finishing elsewhere has to wait for this court's previous game */
+.match-cell.court-wait {
+  background: rgba(255,95,61,0.07);
+  box-shadow: inset 3px 0 0 var(--accent2);
+}
+.wait-note {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--accent2);
+  margin-top: 10px;
+  text-transform: capitalize;
+}
 .divider-col { background: var(--border); width: 1px; display:none; }
 
 .court-label {
@@ -488,6 +500,7 @@ select.force-select { flex: none; width: 150px; }
 .force-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .force-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   background: var(--surface);
@@ -517,6 +530,15 @@ select.force-select { flex: none; width: 150px; }
 }
 .force-badge-ok { color: var(--accent); border: 1px solid rgba(212,245,78,0.4); }
 .force-badge-fail { color: var(--accent2); border: 1px solid var(--accent2); }
+.force-badge-late { color: var(--accent2); border: 1px solid rgba(255,95,61,0.5); }
+.force-note {
+  flex-basis: 100%;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: -2px;
+}
+.force-note.warn { color: var(--accent2); }
 .btn-remove-force {
   background: none;
   border: none;
@@ -911,6 +933,7 @@ function syncWaiting() {
   for (let t=1; t<=NUM_TEAMS; t++) {
     if (!playing.has(t)) r1waiting.push(t);
   }
+  renderForcedList();
 
   // Re-sync r2benchOrder: keep valid assignments, replace any that are no longer waiting
   const validSet = new Set(r1waiting);
@@ -1035,6 +1058,21 @@ function removeForcedMatch(idx) {
   saveState();
 }
 
+// 9 teams rotate in three lockstep groups: Round 1 bench, Round 1 winners, Round 1 losers.
+// Two teams in the same group are always fresh (or on their second game) at the same time,
+// so playing each other after Round 2 forces one of them to change courts.
+// Returns 'yes', 'maybe' (both on Round 1 courts, results not in yet), or null.
+function sameRotation(a, b) {
+  if (NUM_TEAMS !== MAX_TEAMS) return null;
+  if (r1matchups.some(([x, y]) => matchKey(x, y) === matchKey(a, b))) return null;
+  const benchA = r1waiting.includes(a), benchB = r1waiting.includes(b);
+  if (benchA || benchB) return benchA && benchB ? 'yes' : null;
+  const r1 = schedule[0];
+  if (!r1 || r1.matches.some(m => m.winner === null)) return 'maybe';
+  const won = t => r1.matches.some(m => m.winner === t);
+  return won(a) === won(b) ? 'yes' : null;
+}
+
 function renderForcedList() {
   const list = document.getElementById('force-list');
   if (!forcedMatches.length) { list.innerHTML = ''; return; }
@@ -1043,11 +1081,22 @@ function renderForcedList() {
     const isFailed = v === -1;
     const isSatisfied = v !== null && v > 0;
     const cls = isFailed ? 'force-failed' : isSatisfied ? 'force-ok' : '';
+    const isLate = isSatisfied && v === numRounds;
     const badge = isFailed
       ? `<span class="force-badge force-badge-fail">✗ failed</span>`
-      : isSatisfied
-        ? `<span class="force-badge force-badge-ok">✓ R${v}</span>`
-        : '';
+      : isLate
+        ? `<span class="force-badge force-badge-late">R${v}</span>`
+        : isSatisfied
+          ? `<span class="force-badge force-badge-ok">✓ R${v}</span>`
+          : '';
+    const rot = isSatisfied && v <= 2 ? null : sameRotation(a, b);
+    const note = isLate
+      ? `<div class="force-note warn">Only fits in the last round${rot === 'yes' ? ' (same rotation group)' : ''} — might not get played</div>`
+      : rot === 'yes'
+        ? `<div class="force-note warn">⚠ Same rotation group — one team will have to change courts. Play them in Round 1${r1waiting.includes(a) && r1waiting.includes(b) ? ' or move one off the bench' : ''}.</div>`
+        : rot === 'maybe'
+          ? `<div class="force-note">Same rotation group if both win or both lose Round 1 — play them in Round 1 or bench one to be safe.</div>`
+          : '';
     return `
       <div class="force-item ${cls}">
         <div class="force-team">
@@ -1061,21 +1110,10 @@ function renderForcedList() {
         </div>
         ${badge}
         <button class="btn-remove-force" onclick="removeForcedMatch(${i})" title="Remove">×</button>
+        ${note}
       </div>
     `;
   }).join('');
-}
-
-function pairFour(pool, played) {
-  const [a, b, c, d] = pool;
-  const options = [[[a,b],[c,d]], [[a,c],[b,d]], [[a,d],[b,c]]];
-  for (const opt of shuffle([...options])) {
-    if (!played.has(matchKey(opt[0][0], opt[0][1])) &&
-        !played.has(matchKey(opt[1][0], opt[1][1]))) {
-      return opt;
-    }
-  }
-  return [[a,b],[c,d]];
 }
 
 // ─── VALIDATION ──────────────────────────────────────────────────────────────
@@ -1109,23 +1147,6 @@ function validate() {
 // ─── SCHEDULE GENERATION ──────────────────────────────────────────────────────
 function matchKey(a, b) {
   return `${Math.min(a,b)}-${Math.max(a,b)}`;
-}
-
-/**
- * Try to pair winners (3 teams) against incoming (3 teams) with no repeats.
- * Returns array of [w, inc] pairs or null if impossible.
- */
-function pairTeams(groupA, groupB, played) {
-  // Try all permutations of groupB against groupA
-  const perms = permutations(groupB);
-  for (const perm of shuffle(perms)) {
-    let ok = true;
-    for (let i=0; i<groupA.length; i++) {
-      if (played.has(matchKey(groupA[i], perm[i]))) { ok=false; break; }
-    }
-    if (ok) return groupA.map((a,i)=>[a,perm[i]]);
-  }
-  return null;
 }
 
 function permutations(arr) {
@@ -1194,10 +1215,7 @@ function onWinnerSelected(roundIdx, courtIdx, winner) {
     return;
   }
 
-  // Cascade all remaining rounds
-  for (let i = roundIdx; i < numRounds - 1; i++) {
-    computeNextRound(i);
-  }
+  cascadeFrom(roundIdx);
 
   // Check for forced matches that couldn't be satisfied
   const failedIndices = forcedMatches
@@ -1217,6 +1235,64 @@ function onWinnerSelected(roundIdx, courtIdx, winner) {
   renderSchedule();
   renderForcedList();
   saveState();
+}
+
+// Pairing costs (lower is better): a team on its second game in a row changing courts,
+// a court wait, a rematch; forced matchups are a bonus.
+// A forced matchup in the last round costs lastRoundForced — nights usually stop after 6.
+const COST = { move: 10, wait: 100, rematch: 1000, forced: 5000, lastRoundForced: 100000 };
+
+// Generate every round after `roundIdx` several times and keep the best schedule:
+// fewest unmet forced matchups, then forced matchups in the last round, then rematches,
+// then court waits. Retries sometimes
+// hold a forced matchup back so it can land in a round where it doesn't cause a wait.
+const CASCADE_TRIES = 40;
+let forcedDeferChance = 0;
+
+function cascadeFrom(roundIdx) {
+  const keepRounds = schedule.slice(0, roundIdx + 1);
+  const keepForced = [...forcedMatchSatisfiedRound];
+  let best = null;
+  for (let k = 0; k < CASCADE_TRIES; k++) {
+    schedule = [...keepRounds];
+    forcedMatchSatisfiedRound = [...keepForced];
+    rebuildPlayedMatchups(roundIdx);
+    forcedDeferChance = k === 0 ? 0 : 0.5;
+    for (let i = roundIdx; i < numRounds - 1; i++) computeNextRound(i);
+    const cost = scheduleCost(roundIdx);
+    if (!best || cost < best.cost) best = { cost, schedule, forced: forcedMatchSatisfiedRound };
+    if (cost === 0) break;
+  }
+  forcedDeferChance = 0;
+  schedule = best.schedule;
+  forcedMatchSatisfiedRound = best.forced;
+  rebuildPlayedMatchups(schedule.length - 1);
+}
+
+// Teams that played the round before on a different court than this one, summed over later rounds
+function courtMoves(fromRound) {
+  let moves = 0;
+  for (let ri = fromRound + 1; ri < schedule.length; ri++) {
+    schedule[ri].matches.forEach((m, ci) => [m.a, m.b].forEach(t => {
+      const prevCi = schedule[ri-1].matches.findIndex(pm => pm.a === t || pm.b === t);
+      if (prevCi !== -1 && prevCi !== ci) moves++;
+    }));
+  }
+  return moves;
+}
+
+function scheduleCost(fromRound) {
+  const unmet = forcedMatchSatisfiedRound.filter(v => v === null).length;
+  const seen = new Set();
+  let rematches = 0, waits = 0;
+  schedule.forEach((rnd, ri) => rnd.matches.forEach((m, ci) => {
+    const key = matchKey(m.a, m.b);
+    if (seen.has(key)) rematches++;
+    seen.add(key);
+    if (ri > fromRound && courtWaitFor(ri, ci)) waits++;
+  }));
+  const lastRound = forcedMatchSatisfiedRound.filter(v => v === numRounds).length;
+  return unmet * 1e6 + lastRound * COST.lastRoundForced + rematches * COST.rematch + waits * COST.wait + courtMoves(fromRound) * COST.move;
 }
 
 function rebuildPlayedMatchups(upToRound) {
@@ -1269,66 +1345,10 @@ function computeNextRound(roundIdx) {
     comeOnGroup = [...sitting];
   }
 
-  // Sort stayGroup by their court in the current round so staying teams are
-  // assigned back to the same court in the next round wherever possible.
-  const prevCourtOf = {};
-  rnd.matches.forEach((m, ci) => { prevCourtOf[m.a] = ci; prevCourtOf[m.b] = ci; });
-  const stayByPrevCourt = [...stayGroup].sort((a, b) => (prevCourtOf[a] ?? 0) - (prevCourtOf[b] ?? 0));
-
-  // Extract forced matchups first
-  let remaining = [...stayByPrevCourt, ...comeOnGroup];
-  const forcedPairsThisRound = [];
-
-  for (let i = 0; i < forcedMatches.length; i++) {
-    if (forcedMatchSatisfiedRound[i] !== null) continue;
-    const { a, b } = forcedMatches[i];
-    if (remaining.includes(a) && remaining.includes(b)) {
-      // Two stayers are each locked to a different court this round — skip until one comes on
-      if (stayGroup.includes(a) && stayGroup.includes(b)) continue;
-      forcedPairsThisRound.push([a, b]);
-      remaining = remaining.filter(t => t !== a && t !== b);
-      forcedMatchSatisfiedRound[i] = roundIdx + 2; // 1-based round number
-    }
-  }
-
-  // Pair remaining teams
-  let remainingPairs;
-  if (forcedPairsThisRound.length === 0) {
-    remainingPairs = pairTeams(stayByPrevCourt, comeOnGroup, playedMatchups)
-      || stayByPrevCourt.map((t, i) => [t, comeOnGroup[i]]);
-  } else if (remaining.length === 4) {
-    const remStay   = remaining.filter(t => stayGroup.includes(t));
-    const remComeOn = remaining.filter(t => comeOnGroup.includes(t));
-    if (remStay.length === 2 && remComeOn.length === 2) {
-      const remStaySorted = [...remStay].sort((a, b) => (prevCourtOf[a] ?? 0) - (prevCourtOf[b] ?? 0));
-      remainingPairs = pairTeams(remStaySorted, remComeOn, playedMatchups)
-        || pairFour(remaining, playedMatchups);
-    } else {
-      remainingPairs = pairFour(remaining, playedMatchups);
-    }
-  } else if (remaining.length === 2) {
-    remainingPairs = [[remaining[0], remaining[1]]];
-  } else {
-    remainingPairs = [];
-  }
-
-  // Re-assign pairs to courts by where each pair's stayer was last round
-  const allPairsUnordered = [...forcedPairsThisRound, ...remainingPairs];
-  const slots = new Array(NUM_COURTS).fill(null);
-  const unplaced = [];
-  for (const pair of allPairsUnordered) {
-    const stayer = pair.find(t => stayGroup.includes(t));
-    const preferred = stayer !== undefined ? prevCourtOf[stayer] : undefined;
-    if (preferred !== undefined && slots[preferred] === null) {
-      slots[preferred] = pair;
-    } else {
-      unplaced.push(pair);
-    }
-  }
-  let ui = 0;
-  for (let c = 0; c < NUM_COURTS; c++) {
-    if (slots[c] === null) slots[c] = unplaced[ui++];
-  }
+  // Two stayers coming off different courts can't both keep their court — leave that
+  // forced matchup for a later round when one of them comes on
+  const forcedOk = (a, b) => !(stayGroup.includes(a) && stayGroup.includes(b));
+  const slots = bestCourtAssignment(roundIdx, [...stayGroup, ...comeOnGroup], stayGroup, forcedOk);
   schedule[roundIdx + 1] = buildRoundFromPairs(slots, nextSitting);
 }
 
@@ -1348,8 +1368,6 @@ function allMatchings(arr) {
 
 function computeNextRoundFewerTeams(roundIdx) {
   const rnd = schedule[roundIdx];
-  const prevCourtOf = {};
-  rnd.matches.forEach((m, ci) => { prevCourtOf[m.a] = ci; prevCourtOf[m.b] = ci; });
 
   if (roundIdx === 0) {
     // R1 → R2: winners on the first NUM_SITTING courts face the user-assigned waiters.
@@ -1391,21 +1409,32 @@ function computeNextRoundFewerTeams(roundIdx) {
     .slice(0, NUM_SITTING);
 
   const stayGroup = playingNow.filter(t => !nextSitting.includes(t));
-  const available = [...stayGroup, ...rnd.sitting];
-  const pending = forcedMatches.filter((_, i) => forcedMatchSatisfiedRound[i] === null);
+  const slots = bestCourtAssignment(roundIdx, [...stayGroup, ...rnd.sitting], stayGroup);
+  schedule[roundIdx + 1] = buildRoundFromPairs(slots, nextSitting);
+}
 
-  // Score every possible pairing: rematches hurt, forced matchups help
+// Score every pairing of `available` and every way of putting the pairs on courts:
+// rematches hurt most, forced matchups help, then court waits, then staying teams
+// changing courts. Marks any forced matchups it satisfies. `forcedOk(a, b)` can
+// withhold a forced matchup's bonus this round (so can forcedDeferChance on retries).
+function bestCourtAssignment(roundIdx, available, stayGroup, forcedOk = () => true) {
+  const rnd = schedule[roundIdx];
+  const prevCourtOf = {};
+  rnd.matches.forEach((m, ci) => { prevCourtOf[m.a] = ci; prevCourtOf[m.b] = ci; });
+  const pending = forcedMatches.filter((f, i) => forcedMatchSatisfiedRound[i] === null && forcedOk(f.a, f.b) && Math.random() >= forcedDeferChance);
+  const courtOrders = permutations(Array.from({length: NUM_COURTS}, (_, c) => c));
+
   let best = null;
   for (const matching of allMatchings(available)) {
     const rematches = matching.filter(([a, b]) => playedMatchups.has(matchKey(a, b))).length;
     const forcedHits = pending.filter(f => matching.some(([a, b]) => matchKey(a, b) === matchKey(f.a, f.b))).length;
-    // Assign pairs to courts so staying teams keep their court where possible
-    for (const order of permutations(Array.from({length: NUM_COURTS}, (_, c) => c))) {
-      let moves = 0;
-      matching.forEach((pair, i) => pair.forEach(t => {
-        if (stayGroup.includes(t) && prevCourtOf[t] !== order[i]) moves++;
-      }));
-      const score = rematches * 1000 - forcedHits * 5000 + moves * 10 + Math.random();
+    for (const order of courtOrders) {
+      let moves = 0, waits = 0;
+      matching.forEach((pair, i) => {
+        if (isCourtWait(rnd, rnd.matches[order[i]], pair)) waits++;
+        pair.forEach(t => { if (stayGroup.includes(t) && prevCourtOf[t] !== order[i]) moves++; });
+      });
+      const score = rematches * COST.rematch - forcedHits * COST.forced + waits * COST.wait + moves * COST.move + Math.random();
       if (!best || score < best.score) best = { score, matching, order };
     }
   }
@@ -1416,7 +1445,7 @@ function computeNextRoundFewerTeams(roundIdx) {
     if (forcedMatchSatisfiedRound[i] !== null) return;
     if (slots.some(([x, y]) => matchKey(x, y) === matchKey(a, b))) forcedMatchSatisfiedRound[i] = roundIdx + 2;
   });
-  schedule[roundIdx + 1] = buildRoundFromPairs(slots, nextSitting);
+  return slots;
 }
 
 function buildRoundFromPairs(pairs, sitting) {
@@ -1441,6 +1470,23 @@ function rerollRound(roundIdx) {
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
+// True if `pair`, playing where `prevMatch` was, has to wait for that game to finish:
+// no team stays on the court, and at least one team is coming off a different court
+// (teams coming off the bench are waiting anyway).
+function isCourtWait(prevRnd, prevMatch, pair) {
+  if (!prevMatch) return false;
+  if (pair.some(t => t === prevMatch.a || t === prevMatch.b)) return false;
+  return pair.some(t => prevRnd.matches.some(m => m.a === t || m.b === t));
+}
+
+// The previous round's match on this court if this round's match has to wait for it
+function courtWaitFor(ri, ci) {
+  if (ri === 0) return null;
+  const prev = schedule[ri-1].matches[ci];
+  const m = schedule[ri].matches[ci];
+  return isCourtWait(schedule[ri-1], prev, [m.a, m.b]) ? prev : null;
+}
+
 function renderSchedule() {
   const out = document.getElementById('output');
   if (!schedule.length) { out.innerHTML=''; return; }
@@ -1448,8 +1494,10 @@ function renderSchedule() {
   const html = schedule.slice(0, numRounds).map((rnd, ri) => {
     const delay = ri * 60;
     const allWon = rnd.matches.every(m=>m.winner!==null);
-    const matchCells = rnd.matches.map((m, ci) => `
-      <div class="match-cell">
+    const matchCells = rnd.matches.map((m, ci) => {
+      const wait = courtWaitFor(ri, ci);
+      return `
+      <div class="match-cell ${wait ? 'court-wait' : ''}">
         <div class="court-label">Court ${ci+1}</div>
         <div class="matchup">
           <div class="team-badge">
@@ -1472,8 +1520,10 @@ function renderSchedule() {
           </button>
           ` : ''}
         </div>
+        ${wait ? `<div class="wait-note">⏳ Waits for ${teamLabel(wait.a)} vs ${teamLabel(wait.b)}</div>` : ''}
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     const sittingDots = rnd.sitting.map(t=>`
       <div class="sitting-team">
@@ -1520,9 +1570,7 @@ function swapCourts(roundIdx, courtA, courtB) {
   forcedMatchSatisfiedRound = forcedMatchSatisfiedRound.map((v) =>
     (v !== null && v > 0 && v > roundIdx + 1) ? null : v
   );
-  for (let i = roundIdx; i < numRounds - 1; i++) {
-    computeNextRound(i);
-  }
+  cascadeFrom(roundIdx);
   renderSchedule();
   renderForcedList();
   saveState();
