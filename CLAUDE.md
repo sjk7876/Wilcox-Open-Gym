@@ -49,7 +49,7 @@ All state is saved to `localStorage` under the key `wilcox_state_v1` on every mu
 
 **Pairing and courts (R2+)** — `bestCourtAssignment` scores every pairing of the available teams × every court order: rematches (1000) > forced-match bonus (−5000) > court waits (100) > staying teams changing courts (10), plus a random tiebreak. Used by both the 9-team and fewer-teams paths. The 9-team path withholds the forced bonus when both teams are stayers (they're locked to different courts).
 
-**Court waits** — `isCourtWait` / `courtWaitFor`: a match has to wait if no team in it played on that court last round and at least one of its teams just played on a different court (bench teams are waiting anyway). The schedule highlights these courts with a "⏳ Waits for X vs Y" note.
+**Court waits** — `isCourtWait` / `courtWaitFor`: a match has to wait if no team in it played on that court last round and at least one of its teams just played on a different court (bench teams are waiting anyway). The schedule highlights these courts with a "⏳ Waits for X vs Y" note. Separately, `courtArrivals(ri, ci)` lists teams arriving on a court from a different court last round; each gets a "↪ X moves from Court N" note on the cell.
 
 **`cascadeFrom(roundIdx)`** — regenerates every later round `CASCADE_TRIES` (40) times and keeps the schedule with the fewest unmet forced matches, then rematches, then court waits. Retries set `forcedDeferChance` so a forced matchup can be held back to a round where it won't cause a wait. Used by `onWinnerSelected` and `swapCourts`. A forced matchup landing in the last round costs `COST.lastRoundForced` (nights usually stop after 6 rounds), ranked just below an unmet one.
 

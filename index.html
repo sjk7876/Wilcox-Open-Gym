@@ -318,6 +318,7 @@ select:focus { border-color: var(--accent); }
   margin-top: 10px;
   text-transform: capitalize;
 }
+.wait-note + .wait-note { margin-top: 4px; }
 .divider-col { background: var(--border); width: 1px; display:none; }
 
 .court-label {
@@ -1479,6 +1480,16 @@ function isCourtWait(prevRnd, prevMatch, pair) {
   return pair.some(t => prevRnd.matches.some(m => m.a === t || m.b === t));
 }
 
+// Teams in this round's match on court `ci` that played last round on a different court
+function courtArrivals(ri, ci) {
+  if (ri === 0) return [];
+  const m = schedule[ri].matches[ci];
+  return [m.a, m.b].flatMap(t => {
+    const from = schedule[ri-1].matches.findIndex(pm => pm.a === t || pm.b === t);
+    return from !== -1 && from !== ci ? [{ team: t, from }] : [];
+  });
+}
+
 // The previous round's match on this court if this round's match has to wait for it
 function courtWaitFor(ri, ci) {
   if (ri === 0) return null;
@@ -1496,6 +1507,7 @@ function renderSchedule() {
     const allWon = rnd.matches.every(m=>m.winner!==null);
     const matchCells = rnd.matches.map((m, ci) => {
       const wait = courtWaitFor(ri, ci);
+      const arrivals = courtArrivals(ri, ci);
       return `
       <div class="match-cell ${wait ? 'court-wait' : ''}">
         <div class="court-label">Court ${ci+1}</div>
@@ -1520,6 +1532,7 @@ function renderSchedule() {
           </button>
           ` : ''}
         </div>
+        ${arrivals.map(({ team, from }) => `<div class="wait-note">↪ ${teamLabel(team)} moves from Court ${from+1}</div>`).join('')}
         ${wait ? `<div class="wait-note">⏳ Waits for ${teamLabel(wait.a)} vs ${teamLabel(wait.b)}</div>` : ''}
       </div>
     `;
