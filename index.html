@@ -306,8 +306,8 @@ select:focus { border-color: var(--accent); }
   position: relative;
 }
 .match-cell:nth-child(3) { border-right: none; }
-/* Court changeover: a team finishing elsewhere has to wait for this court's previous game */
-.match-cell.court-wait {
+/* Court changeover: a team moves in from another court, or has to wait for this court's previous game */
+.match-cell.court-flag {
   background: rgba(255,95,61,0.07);
   box-shadow: inset 3px 0 0 var(--accent2);
 }
@@ -1509,7 +1509,7 @@ function renderSchedule() {
       const wait = courtWaitFor(ri, ci);
       const arrivals = courtArrivals(ri, ci);
       return `
-      <div class="match-cell ${wait ? 'court-wait' : ''}">
+      <div class="match-cell ${wait || arrivals.length ? 'court-flag' : ''}">
         <div class="court-label">Court ${ci+1}</div>
         <div class="matchup">
           <div class="team-badge">
