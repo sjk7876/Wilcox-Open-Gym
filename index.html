@@ -594,7 +594,9 @@ select.force-select { flex: none; width: 150px; }
   <div class="count-row">
     <label for="num-teams">Teams playing:</label>
     <select id="num-teams" onchange="setNumTeams(parseInt(this.value))"></select>
-    <label for="priority-team" style="margin-left:14px;">Priority team:</label>
+  </div>
+  <div class="count-row" id="priority-row">
+    <label for="priority-team">Priority team:</label>
     <select id="priority-team" style="width:130px;" onchange="setPriorityTeam(this.value)"></select>
   </div>
   <div class="team-grid" id="team-grid"></div>
@@ -675,9 +677,10 @@ function applyTeamCount(n) {
 }
 
 // Host / priority team (team number or null): sits as little as the 3-in-a-row cap allows.
-// Only applies when fewer than MAX_TEAMS are playing.
+// Only applies when fewer than MAX_TEAMS are playing and someone actually sits (not 6 or 4 teams).
 let priorityTeam = null;
 const PRIORITY_MAX_RUN = 3;
+const priorityApplies = () => NUM_TEAMS < MAX_TEAMS && NUM_SITTING > 0;
 
 const DEFAULT_COLORS = ['red','blue','yellow','gray','purple','black','light blue','green','pink'];
 const defaultR1 = () => Array.from({length: NUM_COURTS}, (_, c) => [c*2+1, c*2+2]);
@@ -732,7 +735,7 @@ function loadState() {
     if (!raw) return;
     const s = JSON.parse(raw);
     if (s.numTeams >= MIN_TEAMS && s.numTeams <= MAX_TEAMS) applyTeamCount(s.numTeams);
-    if (s.priorityTeam >= 1 && s.priorityTeam <= NUM_TEAMS && NUM_TEAMS < MAX_TEAMS) priorityTeam = s.priorityTeam;
+    if (s.priorityTeam >= 1 && s.priorityTeam <= NUM_TEAMS && priorityApplies()) priorityTeam = s.priorityTeam;
     if (s.teamColors?.length === MAX_TEAMS)      teamColors = s.teamColors;
     if (s.r1matchups?.length === NUM_COURTS)     r1matchups = s.r1matchups;
     if (s.r2benchOrder?.length === NUM_SITTING)  r2benchOrder = s.r2benchOrder;
@@ -769,9 +772,7 @@ function buildTeamCountSelect() {
 
 function buildPrioritySelect() {
   const sel = document.getElementById('priority-team');
-  const off = NUM_TEAMS >= MAX_TEAMS;
-  sel.disabled = off;
-  sel.title = off ? 'Priority only applies when fewer than 9 teams are playing' : '';
+  document.getElementById('priority-row').style.display = priorityApplies() ? '' : 'none';
   sel.innerHTML = `<option value="">None</option>` + Array.from({length: NUM_TEAMS}, (_, i) => i + 1)
     .map(t => `<option value="${t}" ${t===priorityTeam?'selected':''}>${teamLabel(t)}</option>`).join('');
 }
@@ -1096,7 +1097,7 @@ function validate() {
       return false;
     }
   }
-  if (priorityTeam && NUM_TEAMS < MAX_TEAMS && !playing.includes(priorityTeam)) {
+  if (priorityTeam && priorityApplies() && !playing.includes(priorityTeam)) {
     err.style.display='block';
     err.textContent = 'Error: The priority team has to play in Round 1 — put them on a court instead of the bench.';
     return false;
